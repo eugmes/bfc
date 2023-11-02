@@ -28,6 +28,7 @@ target_link_libraries(bfc PRIVATE
   MLIRArithDialect
   MLIRIndexDialect
   MLIRSCFDialect
+  MLIRFuncAllExtensions
   MLIRMemRefDialect)
 
 target_include_directories(bfc PRIVATE
