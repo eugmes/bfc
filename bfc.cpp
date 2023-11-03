@@ -16,9 +16,11 @@
 #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
+#include "mlir/Target/LLVMIR/Import.h"
 #include "mlir/Transforms/Passes.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Index/IR/IndexDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -84,8 +86,26 @@ static std::unique_ptr<bf::ModuleAST> parseInputFile(llvm::StringRef filename) {
   return parser.parseModule();
 }
 
+static void setMLIRDataLayout(mlir::MLIRContext &context,
+                              mlir::OwningOpRef<mlir::ModuleOp> &module,
+                              llvm::TargetMachine &tm) {
+  const auto &dl = tm.createDataLayout();
+
+  auto op = module->getOperation();
+
+  op->setAttr(mlir::LLVM::LLVMDialect::getDataLayoutAttrName(),
+              mlir::StringAttr::get(&context, dl.getStringRepresentation()));
+  op->setAttr(
+      mlir::LLVM::LLVMDialect::getTargetTripleAttrName(),
+      mlir::StringAttr::get(&context, tm.getTargetTriple().getTriple()));
+  mlir::DataLayoutSpecInterface dlSpec =
+      mlir::translateDataLayout(dl, &context);
+  op->setAttr(mlir::DLTIDialect::kDataLayoutAttrName, dlSpec);
+}
+
 static int loadMLIR(mlir::MLIRContext &context,
-                    mlir::OwningOpRef<mlir::ModuleOp> &module) {
+                    mlir::OwningOpRef<mlir::ModuleOp> &module,
+                    llvm::TargetMachine &tm) {
   // Handle '.bf' input to the compiler.
   if (inputType != InputType::MLIR &&
       !llvm::StringRef(inputFilename).endswith(".mlir")) {
@@ -93,7 +113,10 @@ static int loadMLIR(mlir::MLIRContext &context,
     if (!moduleAST)
       return 6;
     module = mlirGen(context, *moduleAST);
-    return !module ? 1 : 0;
+    if (!module)
+      return 1;
+    setMLIRDataLayout(context, module, tm);
+    return 0;
   }
 
   // Otherwise, the input is '.mlir'.
@@ -116,8 +139,9 @@ static int loadMLIR(mlir::MLIRContext &context,
 }
 
 static int loadAndProcessMLIR(mlir::MLIRContext &context,
-                              mlir::OwningOpRef<mlir::ModuleOp> &module) {
-  if (int error = loadMLIR(context, module))
+                              mlir::OwningOpRef<mlir::ModuleOp> &module,
+                              llvm::TargetMachine &tm) {
+  if (int error = loadMLIR(context, module, tm))
     return error;
 
   mlir::PassManager pm(module.get()->getName());
@@ -180,25 +204,6 @@ static int dumpLLVMIR(mlir::ModuleOp module) {
     return -1;
   }
 
-  // Initialize LLVM targets.
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
-
-  // Configure the LLVM Module
-  auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
-  if (!tmBuilderOrError) {
-    llvm::errs() << "Could not create JITTargetMachineBuilder\n";
-    return -1;
-  }
-
-  auto tmOrError = tmBuilderOrError->createTargetMachine();
-  if (!tmOrError) {
-    llvm::errs() << "Could not create TargetMachine\n";
-    return -1;
-  }
-  mlir::ExecutionEngine::setupTargetTripleAndDataLayout(llvmModule.get(),
-                                                        tmOrError.get().get());
-
   /// Optionally run an optimization pipeline over the llvm module.
   auto optPipeline = mlir::makeOptimizingTransformer(
       /*optLevel=*/enableOpt ? 3 : 0, /*sizeLevel=*/0,
@@ -212,10 +217,6 @@ static int dumpLLVMIR(mlir::ModuleOp module) {
 }
 
 static int runJit(mlir::ModuleOp module) {
-  // Initialize LLVM targets.
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
-
   // Register the translation from MLIR to LLVM IR, which must happen before we
   // can JIT-compile.
   mlir::registerBuiltinDialectTranslation(*module->getContext());
@@ -266,9 +267,30 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::index::IndexDialect>();
   context.getOrLoadDialect<mlir::memref::MemRefDialect>();
   context.getOrLoadDialect<mlir::scf::SCFDialect>();
+  context.getOrLoadDialect<mlir::DLTIDialect>();
+  context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
+
+  // Initialize LLVM targets.
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
+
+  // Configure the LLVM Module
+  auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
+  if (!tmBuilderOrError) {
+    llvm::errs() << "Could not create JITTargetMachineBuilder\n";
+    return -1;
+  }
+
+  auto tmOrError = tmBuilderOrError->createTargetMachine();
+  if (!tmOrError) {
+    llvm::errs() << "Could not create TargetMachine\n";
+    return -1;
+  }
+
+  auto tm = std::move(tmOrError.get());
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
-  if (int error = loadAndProcessMLIR(context, module))
+  if (int error = loadAndProcessMLIR(context, module, *tm))
     return error;
 
   // If we aren't exporting to non-mlir, then we are done.

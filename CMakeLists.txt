@@ -39,7 +39,8 @@ target_link_libraries(bfc PRIVATE
   MLIRReconcileUnrealizedCasts
   MLIRSCFToControlFlow
   MLIRLLVMIRTransforms
-  MLIRExecutionEngine)
+  MLIRExecutionEngine
+  MLIRTargetLLVMIRImport)
 
 target_include_directories(bfc PRIVATE
   include
