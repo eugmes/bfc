@@ -63,7 +63,7 @@ public:
 
     llvm::SmallVector<mlir::Type, 4> operandTypes;
     auto mainFunction = builder.create<mlir::func::FuncOp>(
-        location, "main", builder.getFunctionType(operandTypes, {intType}));
+        location, "main", builder.getFunctionType(operandTypes, {/*intType*/}));
     auto block = mainFunction.addEntryBlock();
 
     builder.setInsertionPointToEnd(block);
@@ -94,10 +94,10 @@ public:
 
     mlirGen(*moduleAST.getBody(), ptr, dataMemRef);
 
-    mlir::Value result =
-        builder.create<mlir::arith::ConstantIntOp>(location, 0, intType);
+    // mlir::Value result =
+    //     builder.create<mlir::arith::ConstantIntOp>(location, 0, intType);
 
-    builder.create<mlir::func::ReturnOp>(location, llvm::ArrayRef(result));
+    builder.create<mlir::func::ReturnOp>(location, mlir::ValueRange{});
 
     if (failed(mlir::verify(theModule))) {
       theModule.emitError("module verification error");

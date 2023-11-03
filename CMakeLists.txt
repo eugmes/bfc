@@ -15,7 +15,8 @@ separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_executable(bfc
   bfc.cpp
   parser/AST.cpp
-  mlir/MLIRGen.cpp)
+  mlir/MLIRGen.cpp
+  mlir/LowerToLLVM.cpp)
 
 target_link_libraries(bfc PRIVATE
   LLVMSupport
@@ -29,7 +30,16 @@ target_link_libraries(bfc PRIVATE
   MLIRIndexDialect
   MLIRSCFDialect
   MLIRFuncAllExtensions
-  MLIRMemRefDialect)
+  MLIRMemRefDialect
+  MLIRIndexToLLVM
+  MLIRArithToLLVM
+  MLIRMemRefToLLVM
+  MLIRControlFlowToLLVM
+  MLIRFuncToLLVM
+  MLIRReconcileUnrealizedCasts
+  MLIRSCFToControlFlow
+  MLIRLLVMIRTransforms
+  MLIRExecutionEngine)
 
 target_include_directories(bfc PRIVATE
   include
