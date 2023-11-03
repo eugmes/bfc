@@ -6,6 +6,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 #include <optional>
 #include <utility>
 #include <vector>
@@ -101,7 +102,7 @@ public:
   OpASTList *getBody() { return body.get(); }
 };
 
-void dump(ModuleAST &);
+void dump(ModuleAST &, llvm::raw_ostream &);
 
 } // namespace bf
 

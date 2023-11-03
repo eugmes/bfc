@@ -158,7 +158,7 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
   }
 
   if (isLoweringToLLVM) {
-    // Finish lowering the toy IR to the LLVM dialect.
+    // Finish lowering the bf IR to the LLVM dialect.
     pm.addPass(mlir::bf::createLowerToLLVMPass());
 
     // Add a few cleanups post lowering.
@@ -187,7 +187,7 @@ static int dumpAST() {
   if (!moduleAST)
     return 1;
 
-  dump(*moduleAST);
+  dump(*moduleAST, llvm::outs());
   return 0;
 }
 
@@ -212,7 +212,7 @@ static int dumpLLVMIR(mlir::ModuleOp module) {
     llvm::errs() << "Failed to optimize LLVM IR " << err << "\n";
     return -1;
   }
-  llvm::errs() << *llvmModule << "\n";
+  llvm::outs() << *llvmModule << "\n";
   return 0;
 }
 
@@ -236,7 +236,6 @@ static int runJit(mlir::ModuleOp module) {
   auto &engine = maybeEngine.get();
 
   // Invoke the JIT-compiled function.
-  int r;
   auto invocationResult = engine->invokePacked("main");
   if (invocationResult) {
     llvm::errs() << "JIT invocation failed\n";
@@ -296,7 +295,7 @@ int main(int argc, char **argv) {
   // If we aren't exporting to non-mlir, then we are done.
   bool isOutputingMLIR = emitAction <= Action::DumpMLIRLLVM;
   if (isOutputingMLIR) {
-    module->dump();
+    module->print(llvm::outs());
     return 0;
   }
 

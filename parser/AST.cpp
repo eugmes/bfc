@@ -23,19 +23,19 @@ struct Indent {
 /// the way. The only data member is the current indentation level.
 class ASTDumper {
 public:
-  void dump(OpAST *op);
-  void dump(OpASTList *opList);
-  void dump(ModuleAST *node);
-  void dump(ModPtrOpAST *node);
-  void dump(ModValOpAST *node);
-  void dump(InputOpAST *node);
-  void dump(OutputOpAST *node);
-  void dump(LoopOpAST *node);
+  void dump(OpAST *op, llvm::raw_ostream &os);
+  void dump(OpASTList *opList, llvm::raw_ostream &os);
+  void dump(ModuleAST *node, llvm::raw_ostream &os);
+  void dump(ModPtrOpAST *node, llvm::raw_ostream &os);
+  void dump(ModValOpAST *node, llvm::raw_ostream &os);
+  void dump(InputOpAST *node, llvm::raw_ostream &os);
+  void dump(OutputOpAST *node, llvm::raw_ostream &os);
+  void dump(LoopOpAST *node, llvm::raw_ostream &os);
 
   // Actually print spaces matching the current indentation level
-  void indent() {
+  void indent(llvm::raw_ostream &os) {
     for (int i = 0; i < curIndent; i++)
-      llvm::errs() << " ";
+      os << " ";
   }
   int curIndent = 0;
 };
@@ -52,68 +52,68 @@ template <typename T> static std::string loc(T *node) {
 
 // Helper Macro to bump the indentation level and print the leading spaces for
 // the current indentations
-#define INDENT()                                                               \
+#define INDENT(os)                                                             \
   Indent level_(curIndent);                                                    \
-  indent();
+  indent(os);
 
 // Dispatch to a generic operations to the appropriate subclass using RTTI
-void ASTDumper::dump(OpAST *op) {
+void ASTDumper::dump(OpAST *op, llvm::raw_ostream &os) {
   llvm::TypeSwitch<OpAST *>(op)
       .Case<ModPtrOpAST, ModValOpAST, InputOpAST, OutputOpAST, LoopOpAST>(
-          [&](auto *node) { this->dump(node); })
+          [&](auto *node) { this->dump(node, os); })
       .Default([&](OpAST *) {
         // No match, fallback to a generic message
-        INDENT();
-        llvm::errs() << "<unknown Op, kind " << op->getKind() << ">\n";
+        INDENT(os);
+        os << "<unknown Op, kind " << op->getKind() << ">\n";
       });
 }
 
 /// A "block", or a list of operations
-void ASTDumper::dump(OpASTList *opList) {
-  INDENT();
-  llvm::errs() << "Block {\n";
+void ASTDumper::dump(OpASTList *opList, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "Block {\n";
   for (auto &op : *opList)
-    dump(op.get());
-  indent();
-  llvm::errs() << "} // Block\n";
+    dump(op.get(), os);
+  indent(os);
+  os << "} // Block\n";
 }
 
-void ASTDumper::dump(ModPtrOpAST *node) {
-  INDENT();
-  llvm::errs() << "ModPtr " << node->getValue();
-  llvm::errs() << " " << loc(node) << "\n";
+void ASTDumper::dump(ModPtrOpAST *node, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "ModPtr " << node->getValue() << " " << loc(node) << "\n";
 }
 
-void ASTDumper::dump(ModValOpAST *node) {
-  INDENT();
-  llvm::errs() << "ModVal " << node->getValue();
-  llvm::errs() << " " << loc(node) << "\n";
+void ASTDumper::dump(ModValOpAST *node, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "ModVal " << node->getValue() << " " << loc(node) << "\n";
 }
 
-void ASTDumper::dump(InputOpAST *node) {
-  INDENT();
-  llvm::errs() << "Input " << loc(node) << "\n";
+void ASTDumper::dump(InputOpAST *node, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "Input " << loc(node) << "\n";
 }
 
-void ASTDumper::dump(OutputOpAST *node) {
-  INDENT();
-  llvm::errs() << "Output " << loc(node) << "\n";
+void ASTDumper::dump(OutputOpAST *node, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "Output " << loc(node) << "\n";
 }
 
-void ASTDumper::dump(LoopOpAST *node) {
-  INDENT();
-  llvm::errs() << "Loop " << loc(node) << "\n";
-  dump(node->getBody());
+void ASTDumper::dump(LoopOpAST *node, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "Loop " << loc(node) << "\n";
+  dump(node->getBody(), os);
 }
 
-void ASTDumper::dump(ModuleAST *node) {
-  INDENT();
-  llvm::errs() << "Module:\n";
-  dump(node->getBody());
+void ASTDumper::dump(ModuleAST *node, llvm::raw_ostream &os) {
+  INDENT(os);
+  os << "Module:\n";
+  dump(node->getBody(), os);
 }
 
 namespace bf {
 
-void dump(ModuleAST &module) { ASTDumper().dump(&module); }
+void dump(ModuleAST &module, llvm::raw_ostream &os) {
+  ASTDumper().dump(&module, os);
+}
 
 } // namespace bf
