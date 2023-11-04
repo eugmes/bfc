@@ -27,6 +27,7 @@
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "bf/BFOps.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
@@ -261,6 +262,7 @@ int main(int argc, char **argv) {
   mlir::func::registerAllExtensions(registry);
 
   mlir::MLIRContext context(registry);
+
   context.getOrLoadDialect<mlir::arith::ArithDialect>();
   context.getOrLoadDialect<mlir::func::FuncDialect>();
   context.getOrLoadDialect<mlir::index::IndexDialect>();
@@ -268,6 +270,7 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::scf::SCFDialect>();
   context.getOrLoadDialect<mlir::DLTIDialect>();
   context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
+  context.getOrLoadDialect<mlir::bf::BFDialect>();
 
   // Initialize LLVM targets.
   llvm::InitializeNativeTarget();
