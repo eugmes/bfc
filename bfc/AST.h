@@ -1,7 +1,7 @@
 #ifndef BF_AST_H
 #define BF_AST_H
 
-#include "bf/Lexer.h"
+#include "Lexer.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"

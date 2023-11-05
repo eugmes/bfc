@@ -5,7 +5,6 @@ def BF_Dialect : Dialect {
   let name = "bf";
   let summary = "A BF MLIR dialect.";
   let cppNamespace = "::mlir::bf";
-  let dependentDialects = ["index::IndexDialect"];
 
   let useDefaultTypePrinterParser = 1;
   let extraClassDeclaration = [{

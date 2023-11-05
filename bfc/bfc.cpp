@@ -1,8 +1,8 @@
-#include "bf/AST.h"
-#include "bf/Lexer.h"
-#include "bf/MLIRGen.h"
-#include "bf/Parser.h"
-#include "bf/Passes.h"
+#include "AST.h"
+#include "Lexer.h"
+#include "MLIRGen.h"
+#include "Parser.h"
+#include "bf/BFPasses.h"
 #include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
@@ -27,7 +27,7 @@
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "bf/BFOps.h"
+#include "bf/BFDialect.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"

@@ -10,12 +10,16 @@ find_package(MLIR REQUIRED CONFIG)
 message(STATUS "Using MLIRConfig.cmake in: ${MLIR_DIR}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-list(APPEND CMAKE_MODULE_PATH "${MLIR_DIR}")
+set(LLVM_RUNTIME_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/bin)
+set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/lib)
 
-include(HandleLLVMOptions)
-include(AddLLVM)
+list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+
 include(TableGen)
+include(AddLLVM)
 include(AddMLIR)
+include(HandleLLVMOptions)
 
 set(BF_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 set(BF_BINARY_DIR ${PROJECT_BINARY_DIR})
@@ -27,38 +31,7 @@ link_directories(${LLVM_BUILD_LIBRARY_DIR})
 add_definitions(${LLVM_DEFINITIONS})
 
 add_subdirectory(include)
-
-add_executable(bfc
-  bfc.cpp
-  parser/AST.cpp
-  mlir/MLIRGen.cpp
-  mlir/LowerToLLVM.cpp
-  mlir/Dialect.cpp)
-
-add_dependencies(bfc MLIRBFOpsIncGen)
-
-include_directories(include)
-
-target_link_libraries(bfc PRIVATE
-  LLVMSupport
-  MLIRAnalysis
-  MLIRIR
-  MLIRParser
-  MLIRSideEffectInterfaces
-  MLIRTransforms
-  MLIRFuncDialect
-  MLIRArithDialect
-  MLIRIndexDialect
-  MLIRSCFDialect
-  MLIRFuncAllExtensions
-  MLIRMemRefDialect
-  MLIRIndexToLLVM
-  MLIRArithToLLVM
-  MLIRMemRefToLLVM
-  MLIRControlFlowToLLVM
-  MLIRFuncToLLVM
-  MLIRReconcileUnrealizedCasts
-  MLIRSCFToControlFlow
-  MLIRLLVMIRTransforms
-  MLIRExecutionEngine
-  MLIRTargetLLVMIRImport)
+add_subdirectory(lib)
+add_subdirectory(bf-opt)
+add_subdirectory(bfc)
+add_subdirectory(test)

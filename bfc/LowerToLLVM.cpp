@@ -1,4 +1,4 @@
-#include "bf/Passes.h"
+#include "bf/BFPasses.h"
 #include "mlir/Dialect/LLVMIR/LLVMAttrs.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/BuiltinAttributes.h"

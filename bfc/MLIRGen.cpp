@@ -1,11 +1,11 @@
-#include "bf/MLIRGen.h"
-#include "bf/AST.h"
+#include "MLIRGen.h"
+#include "AST.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Support/LogicalResult.h"
 
-#include "bf/Lexer.h"
+#include "Lexer.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -44,9 +44,8 @@ public:
 
     builder.setInsertionPointToStart(program.getBody());
 
-    // TODO: Add special accessors
-    dataIndex = program.getBody()->getArgument(0);
-    dataStorage = program.getBody()->getArgument(1);
+    dataIndex = program.getIndexArgument();
+    dataStorage = program.getDataArgument();
 
     mlirGen(*moduleAST.getBody());
 
@@ -131,18 +130,16 @@ private:
 
     mlir::OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(loopOp.getBody());
-    // TODO: create accessors
-    dataIndex = loopOp.getBody()->getArgument(0);
-    dataStorage = loopOp.getBody()->getArgument(1);
+    dataIndex = loopOp.getIndexArgument();
+    dataStorage = loopOp.getDataArgument();
 
     mlirGen(*op.getBody());
 
     // FIXME: Use location of ] here
     builder.create<mlir::bf::YieldOp>(location, dataIndex, dataStorage);
 
-    // TODO: create accessors
-    dataIndex = loopOp.getOutputIndex();
-    dataStorage = loopOp.getOutputData();
+    dataIndex = loopOp.getIndexResult();
+    dataStorage = loopOp.getDataResult();
   }
 };
 

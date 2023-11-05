@@ -1,8 +1,8 @@
 #ifndef BF_PARSER_H
 #define BF_PARSER_H
 
-#include "bf/AST.h"
-#include "bf/Lexer.h"
+#include "AST.h"
+#include "Lexer.h"
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"

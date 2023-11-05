@@ -48,29 +48,37 @@ def InputOp : BF_Op<"input", [AllTypesMatch<["data", "output"]>]> {
 
 def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
                             SingleBlock,
-                            AllTypesMatch<["index", "output_index"]>,
-                            AllTypesMatch<["data", "output_data"]>]> {
+                            AllTypesMatch<["index", "index_result"]>,
+                            AllTypesMatch<["data", "data_result"]>]> {
   let summary = "loop";
 
   let arguments = (ins DataIndexType:$index, DataStoreType:$data);
-  let results = (outs DataIndexType:$output_index, DataStoreType:$output_data);
+  let results = (outs DataIndexType:$index_result, DataStoreType:$data_result);
   let regions = (region SizedRegion<1>:$region);
 
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$index, "Value":$data)>];
 
   let hasCustomAssemblyFormat = 1;
+  let hasRegionVerifier = 1;
+
+  let extraClassDeclaration = [{
+    BlockArgument getIndexArgument() {
+      return getBody()->getArgument(0);
+    }
+
+    BlockArgument getDataArgument() {
+      return getBody()->getArgument(1);
+    }
+  }];
 }
-// bf.loop(%ptr = <value>, %data = <value>) {
-//   yield %ptr, %data
-// }
 
 def YieldOp : BF_Op<"yield", [HasParent<"LoopOp">, Pure, Terminator]> {
   let summary = "yield result from a loop body";
 
   let arguments = (ins DataIndexType:$index, DataStoreType:$data);
 
-  let assemblyFormat = "attr-dict $data `,` $index";
+  let assemblyFormat = "operands attr-dict";
 }
 
 def ProgramOp : BF_Op<"program", [IsolatedFromAbove, AutomaticAllocationScope, SingleBlock, NoTerminator]> {
@@ -83,8 +91,17 @@ def ProgramOp : BF_Op<"program", [IsolatedFromAbove, AutomaticAllocationScope, S
   let builders = [OpBuilder<(ins)>];
 
   let hasCustomAssemblyFormat = 1;
-}
+  let hasRegionVerifier = 1;
 
-// bf.program(%ptr, %data) {}
+  let extraClassDeclaration = [{
+    BlockArgument getIndexArgument() {
+      return getBody()->getArgument(0);
+    }
+
+    BlockArgument getDataArgument() {
+      return getBody()->getArgument(1);
+    }
+  }];
+}
 
 #endif // BF_OPS
