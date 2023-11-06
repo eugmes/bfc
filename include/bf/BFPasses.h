@@ -1,18 +1,26 @@
-#ifndef BF_PASSES_H
-#define BF_PASSES_H
+//===- BFPasses.h - BF passes  ----------------------------------*- C++ -*-===//
+//
+// This file is licensed under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+#ifndef BF_BFPASSES_H
+#define BF_BFPASSES_H
 
+#include "bf/BFDialect.h"
+#include "bf/BFOps.h"
+#include "mlir/Pass/Pass.h"
 #include <memory>
 
 namespace mlir {
-
-class Pass;
-
 namespace bf {
+#define GEN_PASS_DECL
+#include "bf/BFPasses.h.inc"
 
-std::unique_ptr<mlir::Pass> createLowerToLLVMPass();
-
+#define GEN_PASS_REGISTRATION
+#include "bf/BFPasses.h.inc"
 } // namespace bf
-
 } // namespace mlir
 
-#endif // BF_PASSES_H
+#endif // BF_BFPASSES_H

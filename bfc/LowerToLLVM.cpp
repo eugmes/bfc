@@ -75,6 +75,6 @@ void BFToLLVMLoweringPass::runOnOperation() {
     signalPassFailure();
 }
 
-std::unique_ptr<mlir::Pass> mlir::bf::createLowerToLLVMPass() {
-  return std::make_unique<BFToLLVMLoweringPass>();
-}
+// std::unique_ptr<mlir::Pass> mlir::bf::createLowerToLLVMPass() {
+//   return std::make_unique<BFToLLVMLoweringPass>();
+// }

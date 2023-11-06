@@ -19,6 +19,7 @@
 #include "mlir/Target/LLVMIR/Import.h"
 #include "mlir/Transforms/Passes.h"
 
+#include "bf/BFDialect.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -27,7 +28,6 @@
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "bf/BFDialect.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
@@ -58,13 +58,23 @@ static cl::opt<InputType> inputType(
                           "load the input file as am MLIR file")));
 
 namespace {
-enum Action { None, DumpAST, DumpMLIR, DumpMLIRLLVM, DumpLLVMIR, RunJIT };
+enum Action {
+  None,
+  DumpAST,
+  DumpMLIR,
+  DumpTensorMLIR,
+  DumpMLIRLLVM,
+  DumpLLVMIR,
+  RunJIT
+};
 } // namespace
 
 static cl::opt<Action> emitAction(
     "emit", cl::desc("Select the kind of output desired"),
     cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
     cl::values(clEnumValN(DumpMLIR, "mlir", "output the MLIR dump")),
+    cl::values(clEnumValN(DumpTensorMLIR, "mlir-tensor",
+                          "output the MLIR dump after tensor lowering")),
     cl::values(clEnumValN(DumpMLIRLLVM, "mlir-llvm",
                           "output the MLIR dump after llvm lowering")),
     cl::values(clEnumValN(DumpLLVMIR, "llvm", "output the LLVM IR dump")),
@@ -150,17 +160,22 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (mlir::failed(mlir::applyPassManagerCLOptions(pm)))
     return 4;
 
+  bool isLoweringToTensor = emitAction >= Action::DumpTensorMLIR;
   bool isLoweringToLLVM = emitAction >= Action::DumpMLIRLLVM;
 
-  if (isLoweringToLLVM || enableOpt) {
+  if (enableOpt) {
     mlir::OpPassManager &optPM = pm.nest<mlir::func::FuncOp>();
     optPM.addPass(mlir::createCanonicalizerPass());
     optPM.addPass(mlir::createCSEPass());
   }
 
+  if (isLoweringToTensor) {
+    pm.addPass(mlir::bf::createBFConvertToTensors());
+  }
+
   if (isLoweringToLLVM) {
     // Finish lowering the bf IR to the LLVM dialect.
-    pm.addPass(mlir::bf::createLowerToLLVMPass());
+    // pm.addPass(mlir::bf::createLowerToLLVMPass());
 
     // Add a few cleanups post lowering.
     mlir::OpPassManager &optPM = pm.nest<mlir::LLVM::LLVMFuncOp>();
@@ -168,6 +183,7 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
     // debugger working. In the future we will add proper debug information
     // emission directly from our frontend.
     optPM.addPass(mlir::LLVM::createDIScopeForLLVMFuncOpPass());
+    // FIXME: this is needed to get rid of some unrealized type conversions
     optPM.addPass(mlir::createCanonicalizerPass());
     optPM.addPass(mlir::createCSEPass());
   }

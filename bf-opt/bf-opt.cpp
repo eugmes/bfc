@@ -13,11 +13,11 @@
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "bf/BFDialect.h"
-// #include "bf/BFPasses.h"
+#include "bf/BFPasses.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
-//   mlir::bf::registerPasses();
+  mlir::bf::registerPasses();
 
   mlir::DialectRegistry registry;
   registry.insert<mlir::bf::BFDialect>();
