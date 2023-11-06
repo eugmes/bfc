@@ -20,6 +20,7 @@ namespace bf {
 
 #define GEN_PASS_REGISTRATION
 #include "bf/BFPasses.h.inc"
+
 } // namespace bf
 } // namespace mlir
 

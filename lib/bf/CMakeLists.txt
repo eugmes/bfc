@@ -3,6 +3,7 @@ add_mlir_dialect_library(MLIRBF
     BFDialect.cpp
     BFOps.cpp
     BFConvertToTensors.cpp
+    BFConvertToLLVM.cpp
 
     ADDITIONAL_HEADER_DIRS
     ${PROJECT_SOURCE_DIR}/include/bf

@@ -21,4 +21,11 @@ def BFConvertToTensors: Pass<"convert-bf-to-tensors", "ModuleOp"> {
     ];
 }
 
+def BFConvertToLLVM: Pass<"convert-bf-to-llvm", "ModuleOp"> {
+    let dependentDialects = [
+        "bufferization::BufferizationDialect",
+        "LLVM::LLVMDialect",
+    ];
+}
+
 #endif

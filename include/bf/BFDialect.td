@@ -1,6 +1,8 @@
 #ifndef BF_DIALECT
 #define BF_DIALECT
 
+include "mlir/IR/OpBase.td"
+
 def BF_Dialect : Dialect {
   let name = "bf";
   let summary = "A BF MLIR dialect.";

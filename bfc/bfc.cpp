@@ -28,6 +28,8 @@
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/InitAllDialects.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
@@ -175,7 +177,7 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   if (isLoweringToLLVM) {
     // Finish lowering the bf IR to the LLVM dialect.
-    // pm.addPass(mlir::bf::createLowerToLLVMPass());
+    pm.addPass(mlir::bf::createBFConvertToLLVM());
 
     // Add a few cleanups post lowering.
     mlir::OpPassManager &optPM = pm.nest<mlir::LLVM::LLVMFuncOp>();
@@ -183,7 +185,7 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
     // debugger working. In the future we will add proper debug information
     // emission directly from our frontend.
     optPM.addPass(mlir::LLVM::createDIScopeForLLVMFuncOpPass());
-    // FIXME: this is needed to get rid of some unrealized type conversions
+    // // FIXME: this is needed to get rid of some unrealized type conversions
     optPM.addPass(mlir::createCanonicalizerPass());
     optPM.addPass(mlir::createCSEPass());
   }
@@ -276,17 +278,19 @@ int main(int argc, char **argv) {
   // If we aren't dumping the AST, then we are compiling with/to MLIR.
   mlir::DialectRegistry registry;
   mlir::func::registerAllExtensions(registry);
+  mlir::registerAllDialects(registry);
 
   mlir::MLIRContext context(registry);
-
-  context.getOrLoadDialect<mlir::arith::ArithDialect>();
-  context.getOrLoadDialect<mlir::func::FuncDialect>();
-  context.getOrLoadDialect<mlir::index::IndexDialect>();
-  context.getOrLoadDialect<mlir::memref::MemRefDialect>();
-  context.getOrLoadDialect<mlir::scf::SCFDialect>();
-  context.getOrLoadDialect<mlir::DLTIDialect>();
-  context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
+  context.loadAllAvailableDialects();
+  // context.getOrLoadDialect<mlir::arith::ArithDialect>();
+  // context.getOrLoadDialect<mlir::func::FuncDialect>();
+  // context.getOrLoadDialect<mlir::index::IndexDialect>();
+  // context.getOrLoadDialect<mlir::memref::MemRefDialect>();
+  // context.getOrLoadDialect<mlir::scf::SCFDialect>();
+  // context.getOrLoadDialect<mlir::DLTIDialect>();
+  // context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   context.getOrLoadDialect<mlir::bf::BFDialect>();
+  // context.getOrLoadDialect<mlir::tensor::TensorDialect>();
 
   // Initialize LLVM targets.
   llvm::InitializeNativeTarget();

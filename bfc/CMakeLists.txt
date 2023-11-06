@@ -14,8 +14,7 @@ set(LIBS
 add_llvm_executable(bfc
   bfc.cpp
   AST.cpp
-  MLIRGen.cpp
-  LowerToLLVM.cpp)
+  MLIRGen.cpp)
 
 llvm_update_compile_flags(bfc)
 target_link_libraries(bfc PRIVATE ${LIBS})
