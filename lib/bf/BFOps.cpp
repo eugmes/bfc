@@ -14,8 +14,8 @@
 
 using namespace mlir::bf;
 
-void ModPtrOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                     mlir::Value input, int64_t amount) {
+void ModIndexOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                       mlir::Value input, int64_t amount) {
   state.addOperands({input});
   state.addTypes({input.getType()});
   state.addAttribute(getAmountAttrName(state.name),

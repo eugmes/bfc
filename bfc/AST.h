@@ -17,8 +17,8 @@ namespace bf {
 class OpAST {
 public:
   enum OpASTKind {
-    Op_ModPtr,
-    Op_ModVal,
+    Op_ModIndex,
+    Op_ModData,
     Op_Input,
     Op_Output,
     Op_Loop,
@@ -38,30 +38,30 @@ private:
 
 using OpASTList = std::vector<std::unique_ptr<OpAST>>;
 
-class ModPtrOpAST : public OpAST {
+class ModIndexOpAST : public OpAST {
   std::int64_t value;
 
 public:
-  ModPtrOpAST(Location location, std::int64_t value)
-      : OpAST(Op_ModPtr, location), value(value) {}
+  ModIndexOpAST(Location location, std::int64_t value)
+      : OpAST(Op_ModIndex, location), value(value) {}
 
   std::int64_t getValue() const { return value; }
 
   // LLVM style RTTI
-  static bool classof(const OpAST *c) { return c->getKind() == Op_ModPtr; }
+  static bool classof(const OpAST *c) { return c->getKind() == Op_ModIndex; }
 };
 
-class ModValOpAST : public OpAST {
+class ModDataOpAST : public OpAST {
   std::int64_t value;
 
 public:
-  ModValOpAST(Location location, std::int64_t value)
-      : OpAST(Op_ModVal, location), value(value) {}
+  ModDataOpAST(Location location, std::int64_t value)
+      : OpAST(Op_ModData, location), value(value) {}
 
   std::int64_t getValue() const { return value; }
 
   // LLVM style RTTI
-  static bool classof(const OpAST *c) { return c->getKind() == Op_ModVal; }
+  static bool classof(const OpAST *c) { return c->getKind() == Op_ModData; }
 };
 
 class InputOpAST : public OpAST {

@@ -5,7 +5,7 @@ include "bf/BFTypes.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-def ModPtrOp : BF_Op<"mod_ptr", [Pure, AllTypesMatch<["input", "output"]>]> {
+def ModIndexOp : BF_Op<"mod_index", [Pure, AllTypesMatch<["input", "output"]>]> {
   let summary = "modify the data pointer";
 
   let arguments = (ins DataIndexType:$input, IndexAttr:$amount);

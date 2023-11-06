@@ -83,12 +83,12 @@ public:
   }
 };
 
-struct ModPtrOpLowering : public OpConversionPattern<ModPtrOp> {
+struct ModIndexOpLowering : public OpConversionPattern<ModIndexOp> {
 public:
-  using OpConversionPattern<ModPtrOp>::OpConversionPattern;
+  using OpConversionPattern<ModIndexOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(ModPtrOp op, OpAdaptor adaptor,
+  matchAndRewrite(ModIndexOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op.getLoc();
 
@@ -270,7 +270,7 @@ public:
     BFTypeConverter converter;
 
     RewritePatternSet patterns(&getContext());
-    patterns.add<ProgramOpLowering, ModPtrOpLowering, ModDataOpLowering,
+    patterns.add<ProgramOpLowering, ModIndexOpLowering, ModDataOpLowering,
                  InputOpLowering, OutputOpLowering, LoopOpLowering,
                  YieldOpLowering>(converter, patterns.getContext());
 

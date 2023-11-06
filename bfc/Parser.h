@@ -50,16 +50,16 @@ private:
       return nullptr;
 
     case tok_gt:
-      result = std::make_unique<ModPtrOpAST>(location, 1);
+      result = std::make_unique<ModIndexOpAST>(location, 1);
       break;
     case tok_lt:
-      result = std::make_unique<ModPtrOpAST>(location, -1);
+      result = std::make_unique<ModIndexOpAST>(location, -1);
       break;
     case tok_plus:
-      result = std::make_unique<ModValOpAST>(location, 1);
+      result = std::make_unique<ModDataOpAST>(location, 1);
       break;
     case tok_minus:
-      result = std::make_unique<ModValOpAST>(location, -1);
+      result = std::make_unique<ModDataOpAST>(location, -1);
       break;
     case tok_period:
       result = std::make_unique<OutputOpAST>(location);

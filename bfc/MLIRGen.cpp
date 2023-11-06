@@ -83,11 +83,11 @@ private:
 
   void mlirGen(OpAST &op) {
     switch (op.getKind()) {
-    case OpAST::Op_ModPtr:
-      mlirGen(llvm::cast<ModPtrOpAST>(op));
+    case OpAST::Op_ModIndex:
+      mlirGen(llvm::cast<ModIndexOpAST>(op));
       break;
-    case OpAST::Op_ModVal:
-      mlirGen(llvm::cast<ModValOpAST>(op));
+    case OpAST::Op_ModData:
+      mlirGen(llvm::cast<ModDataOpAST>(op));
       break;
     case OpAST::Op_Input:
       mlirGen(llvm::cast<InputOpAST>(op));
@@ -101,13 +101,13 @@ private:
     }
   }
 
-  void mlirGen(ModPtrOpAST &op) {
+  void mlirGen(ModIndexOpAST &op) {
     auto location = loc(op.loc());
-    dataIndex =
-        builder.create<mlir::bf::ModPtrOp>(location, dataIndex, op.getValue());
+    dataIndex = builder.create<mlir::bf::ModIndexOp>(location, dataIndex,
+                                                     op.getValue());
   }
 
-  void mlirGen(ModValOpAST &op) {
+  void mlirGen(ModDataOpAST &op) {
     auto location = loc(op.loc());
     dataStorage = builder.create<mlir::bf::ModDataOp>(
         location, dataIndex, dataStorage, op.getValue());
@@ -126,7 +126,8 @@ private:
 
   void mlirGen(LoopOpAST &op) {
     auto location = loc(op.loc());
-    auto loopOp = builder.create<mlir::bf::LoopOp>(location, dataIndex, dataStorage);
+    auto loopOp =
+        builder.create<mlir::bf::LoopOp>(location, dataIndex, dataStorage);
 
     mlir::OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(loopOp.getBody());

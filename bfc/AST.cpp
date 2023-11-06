@@ -26,8 +26,8 @@ public:
   void dump(OpAST *op, llvm::raw_ostream &os);
   void dump(OpASTList *opList, llvm::raw_ostream &os);
   void dump(ModuleAST *node, llvm::raw_ostream &os);
-  void dump(ModPtrOpAST *node, llvm::raw_ostream &os);
-  void dump(ModValOpAST *node, llvm::raw_ostream &os);
+  void dump(ModIndexOpAST *node, llvm::raw_ostream &os);
+  void dump(ModDataOpAST *node, llvm::raw_ostream &os);
   void dump(InputOpAST *node, llvm::raw_ostream &os);
   void dump(OutputOpAST *node, llvm::raw_ostream &os);
   void dump(LoopOpAST *node, llvm::raw_ostream &os);
@@ -59,7 +59,7 @@ template <typename T> static std::string loc(T *node) {
 // Dispatch to a generic operations to the appropriate subclass using RTTI
 void ASTDumper::dump(OpAST *op, llvm::raw_ostream &os) {
   llvm::TypeSwitch<OpAST *>(op)
-      .Case<ModPtrOpAST, ModValOpAST, InputOpAST, OutputOpAST, LoopOpAST>(
+      .Case<ModIndexOpAST, ModDataOpAST, InputOpAST, OutputOpAST, LoopOpAST>(
           [&](auto *node) { this->dump(node, os); })
       .Default([&](OpAST *) {
         // No match, fallback to a generic message
@@ -78,14 +78,14 @@ void ASTDumper::dump(OpASTList *opList, llvm::raw_ostream &os) {
   os << "} // Block\n";
 }
 
-void ASTDumper::dump(ModPtrOpAST *node, llvm::raw_ostream &os) {
+void ASTDumper::dump(ModIndexOpAST *node, llvm::raw_ostream &os) {
   INDENT(os);
-  os << "ModPtr " << node->getValue() << " " << loc(node) << "\n";
+  os << "ModIndex " << node->getValue() << " " << loc(node) << "\n";
 }
 
-void ASTDumper::dump(ModValOpAST *node, llvm::raw_ostream &os) {
+void ASTDumper::dump(ModDataOpAST *node, llvm::raw_ostream &os) {
   INDENT(os);
-  os << "ModVal " << node->getValue() << " " << loc(node) << "\n";
+  os << "ModData " << node->getValue() << " " << loc(node) << "\n";
 }
 
 void ASTDumper::dump(InputOpAST *node, llvm::raw_ostream &os) {
