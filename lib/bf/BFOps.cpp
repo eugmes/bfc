@@ -14,41 +14,94 @@
 #define GET_OP_CLASSES
 #include "bf/BFOps.cpp.inc"
 
+using namespace mlir;
+using namespace llvm;
 using namespace mlir::bf;
 
-void ModIndexOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                       mlir::Value input, int64_t amount) {
+void ModIndexOp::build(OpBuilder &builder, OperationState &state, Value input,
+                       int64_t amount) {
   state.addOperands({input});
   state.addTypes({input.getType()});
   state.addAttribute(getAmountAttrName(state.name),
                      builder.getIndexAttr(amount));
 }
 
-mlir::LogicalResult ModIndexOp::canonicalize(ModIndexOp op,
-                                             mlir::PatternRewriter &rewriter) {
-  ModIndexOp modOp = op.getInput().getDefiningOp<ModIndexOp>();
-  if (!modOp)
-    return rewriter.notifyMatchFailure(op.getLoc(),
-                                       "operand is not result of mod_index");
-  // TODO: Add accessors
-  auto newAmount = op.getAmountAttr().getInt() + modOp.getAmountAttr().getInt();
+namespace {
 
-  if (newAmount == 0)
-    rewriter.replaceOp(op, modOp.getInput());
-  else
-    rewriter.replaceOpWithNewOp<ModIndexOp>(op, modOp.getInput(), newAmount);
-  return success();
+struct CombineModIndex : public OpRewritePattern<ModIndexOp> {
+  using OpRewritePattern<ModIndexOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ModIndexOp op,
+                                PatternRewriter &rewriter) const final {
+    ModIndexOp modOp = op.getIndex().getDefiningOp<ModIndexOp>();
+    if (!modOp)
+      return rewriter.notifyMatchFailure(
+          op.getLoc(), "operand is not result of bf.mod_index");
+    // TODO: Add accessors
+    auto newAmount =
+        op.getAmountAttr().getInt() + modOp.getAmountAttr().getInt();
+
+    if (newAmount == 0)
+      rewriter.replaceOp(op, modOp.getIndex());
+    else
+      rewriter.replaceOpWithNewOp<ModIndexOp>(op, modOp.getIndex(), newAmount);
+    return success();
+  }
+};
+} // namespace
+
+void ModIndexOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                             MLIRContext *context) {
+  results.add<CombineModIndex>(context);
 }
 
-void ModDataOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                      mlir::Value index, mlir::Value data, int64_t amount) {
+void ModDataOp::build(OpBuilder &builder, OperationState &state, Value index,
+                      Value data, int64_t amount) {
   state.addOperands({index, data});
   state.addAttribute(getAmountAttrName(state.name),
                      builder.getIndexAttr(amount));
 }
 
-void LoopOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                   mlir::Value index, mlir::Value data) {
+namespace {
+struct CombineModData : public OpRewritePattern<ModDataOp> {
+  using OpRewritePattern<ModDataOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ModDataOp op,
+                                PatternRewriter &rewriter) const final {
+    // TODO allow to combine ops that are not immediately following each other
+    auto prev = op->getPrevNode();
+    if (!prev || !isa<ModDataOp>(prev))
+      return failure();
+
+    auto prevOp = cast<ModDataOp>(op->getPrevNode());
+    if (!prevOp || (prevOp.getIndex() != op.getIndex()) ||
+        (prevOp.getData() != op.getData()))
+      return failure();
+
+    auto newAmount =
+        prevOp.getAmountAttr().getInt() + op.getAmountAttr().getInt();
+
+    rewriter.eraseOp(prevOp);
+    if (newAmount != 0) {
+      rewriter.startRootUpdate(op);
+      op.setAmount(newAmount);
+      rewriter.finalizeRootUpdate(op);
+    } else {
+      rewriter.eraseOp(op);
+    }
+
+    return success();
+  }
+};
+} // namespace
+
+void ModDataOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                            MLIRContext *context) {
+  results.add<CombineModData>(context);
+}
+
+void LoopOp::build(OpBuilder &builder, OperationState &state, Value index,
+                   Value data) {
   state.addOperands({index, data});
   state.addTypes({index.getType()});
   Region *bodyRegion = state.addRegion();
@@ -57,8 +110,7 @@ void LoopOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
   body->addArgument(index.getType(), state.location);
 }
 
-mlir::ParseResult LoopOp::parse(mlir::OpAsmParser &parser,
-                                mlir::OperationState &state) {
+ParseResult LoopOp::parse(OpAsmParser &parser, OperationState &state) {
   OpAsmParser::Argument indexArgument;
   OpAsmParser::UnresolvedOperand index, data;
 
@@ -98,7 +150,7 @@ void LoopOp::print(OpAsmPrinter &p) {
   p.printOptionalAttrDict((*this)->getAttrs());
 }
 
-mlir::LogicalResult LoopOp::verifyRegions() {
+LogicalResult LoopOp::verifyRegions() {
   auto body = getBody();
   if (!body)
     return emitOpError("missing body");
@@ -116,7 +168,7 @@ mlir::LogicalResult LoopOp::verifyRegions() {
   return success();
 }
 
-void ProgramOp::build(mlir::OpBuilder &builder, mlir::OperationState &state) {
+void ProgramOp::build(OpBuilder &builder, OperationState &state) {
   Region *bodyRegion = state.addRegion();
   Block *body = new Block();
   bodyRegion->push_back(body);
@@ -124,8 +176,7 @@ void ProgramOp::build(mlir::OpBuilder &builder, mlir::OperationState &state) {
   body->addArgument(builder.getType<DataStoreType>(), state.location);
 }
 
-mlir::ParseResult ProgramOp::parse(mlir::OpAsmParser &parser,
-                                   mlir::OperationState &state) {
+ParseResult ProgramOp::parse(OpAsmParser &parser, OperationState &state) {
   SmallVector<OpAsmParser::Argument, 2> args;
   if (parser.parseArgumentList(args, AsmParser::Delimiter::Paren, true))
     return failure();
@@ -143,14 +194,14 @@ mlir::ParseResult ProgramOp::parse(mlir::OpAsmParser &parser,
 
 void ProgramOp::print(OpAsmPrinter &p) {
   p << "(";
-  llvm::interleaveComma(getBodyRegion().getArguments(), p,
-                        [&p](auto it) { p.printRegionArgument(it); });
+  interleaveComma(getBodyRegion().getArguments(), p,
+                  [&p](auto it) { p.printRegionArgument(it); });
   p << ") ";
   p.printRegion(getRegion(), false);
   p.printOptionalAttrDict((*this)->getAttrs());
 }
 
-mlir::LogicalResult ProgramOp::verifyRegions() {
+LogicalResult ProgramOp::verifyRegions() {
   auto body = getBody();
   if (!body)
     return emitOpError("missing body");

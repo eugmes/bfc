@@ -105,16 +105,16 @@ public:
     auto loc = op.getLoc();
 
     auto amount = op.getAmountAttr().getInt(); // TODO better API
-    Value input = adaptor.getInput();
+    Value index = adaptor.getIndex();
 
     if (amount == 0) {
-      rewriter.replaceOp(op, input);
+      rewriter.replaceOp(op, index);
     } else if (amount < 0) {
       Value c = rewriter.create<index::ConstantOp>(loc, -amount);
-      rewriter.replaceOpWithNewOp<index::SubOp>(op, input, c);
+      rewriter.replaceOpWithNewOp<index::SubOp>(op, index, c);
     } else {
       Value c = rewriter.create<index::ConstantOp>(loc, amount);
-      rewriter.replaceOpWithNewOp<index::AddOp>(op, input, c);
+      rewriter.replaceOpWithNewOp<index::AddOp>(op, index, c);
     }
 
     return success();

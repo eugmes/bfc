@@ -5,18 +5,24 @@ include "bf/BFTypes.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-def ModIndexOp : BF_Op<"mod_index", [Pure, AllTypesMatch<["input", "output"]>]> {
+def ModIndexOp : BF_Op<"mod_index", [Pure, AllTypesMatch<["index", "result"]>]> {
   let summary = "modify the data pointer";
 
-  let arguments = (ins DataIndexType:$input, IndexAttr:$amount);
-  let results = (outs DataIndexType:$output);
+  let arguments = (ins DataIndexType:$index, IndexAttr:$amount);
+  let results = (outs DataIndexType:$result);
 
   let skipDefaultBuilders = 1;
-  let builders = [OpBuilder<(ins "Value":$input, "int64_t":$amount)>];
+  let builders = [OpBuilder<(ins "Value":$index, "int64_t":$amount)>];
 
-  let hasCanonicalizeMethod = 1;
+  let hasCanonicalizer = 1;
 
-  let assemblyFormat = "$input `by` $amount attr-dict";
+  let assemblyFormat = "$index `by` $amount attr-dict";
+
+  let extraClassDeclaration = [{
+    void setAmount(int64_t value) {
+      setAmountAttr(IntegerAttr::get(IndexType::get(getContext()), value));
+    }
+  }];
 }
 
 def ModDataOp : BF_Op<"mod_data", []> {
@@ -27,7 +33,15 @@ def ModDataOp : BF_Op<"mod_data", []> {
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$index, "Value":$data, "int64_t":$amount)>];
 
+  let hasCanonicalizer = 1;
+
   let assemblyFormat = "$data `[` $index `]` `by` $amount attr-dict";
+
+  let extraClassDeclaration = [{
+    void setAmount(int64_t value) {
+      setAmountAttr(IntegerAttr::get(IndexType::get(getContext()), value));
+    }
+  }];
 }
 
 def OutputOp : BF_Op<"output", []> {
