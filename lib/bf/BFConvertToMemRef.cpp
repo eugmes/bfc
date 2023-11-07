@@ -2,16 +2,15 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Index/IR/IndexDialect.h"
 #include "mlir/Dialect/Index/IR/IndexOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/IR/BuiltinDialect.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
 
 #include "bf/BFPasses.h"
 
 namespace mlir::bf {
-#define GEN_PASS_DEF_BFCONVERTTOTENSORS
+#define GEN_PASS_DEF_BFCONVERTTOMEMREF
 #include "bf/BFPasses.h.inc"
 
 namespace {
@@ -30,7 +29,7 @@ struct BFTypeConverter : public TypeConverter {
     if (t.isa<DataStoreType>()) {
       Type byteType =
           IntegerType::get(t.getContext(), 8); // TODO make configurable
-      Type storeType = RankedTensorType::get({30'000}, byteType);
+      Type storeType = MemRefType::get({30'000}, byteType);
       results.push_back(storeType);
       return success();
     }
@@ -72,7 +71,20 @@ public:
     auto mainBody = rewriter.createBlock(&mainFunc.getBody());
     Value index = rewriter.create<index::ConstantOp>(loc, 0);
     Value zeroByte = rewriter.create<arith::ConstantIntOp>(loc, 0, byteType);
-    Value data = rewriter.create<tensor::SplatOp>(loc, dataType, zeroByte);
+    Value data =
+        rewriter.create<memref::AllocaOp>(loc, cast<MemRefType>(dataType));
+
+    // Initialize the data
+    Value low = rewriter.create<index::ConstantOp>(loc, 0);
+    Value high = rewriter.create<index::ConstantOp>(loc, 30'000); // FIXME
+    Value step = rewriter.create<index::ConstantOp>(loc, 1);
+
+    auto forOp = rewriter.create<scf::ForOp>(loc, low, high, step);
+    auto ip = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointToStart(forOp.getBody());
+    rewriter.create<memref::StoreOp>(loc, zeroByte, data,
+                                     forOp.getBody()->getArguments());
+    rewriter.restoreInsertionPoint(ip);
 
     rewriter.mergeBlocks(bodyBlock, mainBody, {index, data});
     rewriter.create<func::ReturnOp>(loc);
@@ -123,10 +135,10 @@ public:
     Value data = adaptor.getData();
 
     if (amount == 0) {
-      rewriter.replaceOp(op, data);
+      rewriter.eraseOp(op);
     } else {
       Value oldValue =
-          rewriter.create<tensor::ExtractOp>(loc, data, ValueRange{index});
+          rewriter.create<memref::LoadOp>(loc, data, ValueRange{index});
       Value newValue;
       if (amount < 0) {
         Value c = rewriter.create<arith::ConstantIntOp>(loc, -amount,
@@ -137,8 +149,8 @@ public:
                                                         rewriter.getI8Type());
         newValue = rewriter.create<arith::AddIOp>(loc, oldValue, c);
       }
-      rewriter.replaceOpWithNewOp<tensor::InsertOp>(op, newValue, data,
-                                                    ValueRange{index});
+      rewriter.replaceOpWithNewOp<memref::StoreOp>(op, newValue, data,
+                                                   ValueRange{index});
     }
 
     return success();
@@ -159,8 +171,7 @@ public:
 
     Type intType = rewriter.getI32Type(); // TODO: Make configurable
 
-    Value value =
-        rewriter.create<tensor::ExtractOp>(loc, data, ValueRange{index});
+    Value value = rewriter.create<memref::LoadOp>(loc, data, ValueRange{index});
     value = rewriter.create<arith::ExtUIOp>(loc, intType, value);
     rewriter.create<func::CallOp>(loc, intType, "putchar", ValueRange{value});
     rewriter.eraseOp(op);
@@ -188,8 +199,8 @@ public:
         rewriter.create<func::CallOp>(loc, intType, "getchar", ValueRange{})
             .getResult(0);
     value = rewriter.create<arith::TruncIOp>(loc, byteType, value);
-    rewriter.replaceOpWithNewOp<tensor::InsertOp>(op, value, data,
-                                                  ValueRange{index});
+    rewriter.replaceOpWithNewOp<memref::StoreOp>(op, value, data,
+                                                 ValueRange{index});
 
     return success();
   }
@@ -204,34 +215,29 @@ public:
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op.getLoc();
 
-    SmallVector<Type, 2> results;
-    if (failed(getTypeConverter()->convertTypes(op.getResultTypes(), results)))
-      return failure();
-    SmallVector<Location, 2> locs{rewriter.getUnknownLoc(),
-                                  rewriter.getUnknownLoc()};
+    Type resultType = getTypeConverter()->convertType(op.getType());
 
     auto whileOp = rewriter.replaceOpWithNewOp<scf::WhileOp>(
-        op, results, adaptor.getOperands());
+        op, TypeRange{resultType}, ValueRange{adaptor.getIndex()});
 
     {
       auto &region = whileOp.getRegion(0);
-      auto condBlock =
-          rewriter.createBlock(&region, region.end(), results, locs);
+      auto condBlock = rewriter.createBlock(&region, region.end(), {resultType},
+                                            {rewriter.getUnknownLoc()});
       Value index = condBlock->getArgument(0);
-      Value data = condBlock->getArgument(1);
-      Value value =
-          rewriter.create<tensor::ExtractOp>(loc, data, ValueRange{index});
+      Value value = rewriter.create<memref::LoadOp>(loc, adaptor.getData(),
+                                                    ValueRange{index});
       Value zero =
           rewriter.create<arith::ConstantIntOp>(loc, 0, value.getType());
       Value cond = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne,
                                                   value, zero);
-      rewriter.create<scf::ConditionOp>(loc, cond, ValueRange{index, data});
+      rewriter.create<scf::ConditionOp>(loc, cond, ValueRange{index});
     }
 
     {
       auto &region = whileOp.getRegion(1);
-      auto bodyBlock =
-          rewriter.createBlock(&region, region.end(), results, locs);
+      auto bodyBlock = rewriter.createBlock(&region, region.end(), {resultType},
+                                            {rewriter.getUnknownLoc()});
       rewriter.mergeBlocks(op.getBody(), bodyBlock, bodyBlock->getArguments());
     }
 
@@ -252,18 +258,18 @@ public:
   }
 };
 
-class BFConvertToTensors
-    : public impl::BFConvertToTensorsBase<BFConvertToTensors> {
+class BFConvertToMemRef
+    : public impl::BFConvertToMemRefBase<BFConvertToMemRef> {
 public:
-  using impl::BFConvertToTensorsBase<
-      BFConvertToTensors>::BFConvertToTensorsBase;
+  using impl::BFConvertToMemRefBase<BFConvertToMemRef>::BFConvertToMemRefBase;
 
   void runOnOperation() final {
     ConversionTarget target(getContext());
+    target.addLegalOp<ModuleOp>();
 
     target.addLegalDialect<scf::SCFDialect, arith::ArithDialect,
-                           index::IndexDialect, tensor::TensorDialect,
-                           BuiltinDialect, func::FuncDialect>();
+                           index::IndexDialect, memref::MemRefDialect,
+                           func::FuncDialect>();
 
     target.addIllegalDialect<BFDialect>();
 

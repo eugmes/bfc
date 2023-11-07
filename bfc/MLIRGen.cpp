@@ -109,14 +109,13 @@ private:
 
   void mlirGen(ModDataOpAST &op) {
     auto location = loc(op.loc());
-    dataStorage = builder.create<mlir::bf::ModDataOp>(
-        location, dataIndex, dataStorage, op.getValue());
+    builder.create<mlir::bf::ModDataOp>(location, dataIndex, dataStorage,
+                                        op.getValue());
   }
 
   void mlirGen(InputOpAST &op) {
     auto location = loc(op.loc());
-    dataStorage =
-        builder.create<mlir::bf::InputOp>(location, dataIndex, dataStorage);
+    builder.create<mlir::bf::InputOp>(location, dataIndex, dataStorage);
   }
 
   void mlirGen(OutputOpAST &op) {
@@ -132,15 +131,13 @@ private:
     mlir::OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(loopOp.getBody());
     dataIndex = loopOp.getIndexArgument();
-    dataStorage = loopOp.getDataArgument();
 
     mlirGen(*op.getBody());
 
     // FIXME: Use location of ] here
-    builder.create<mlir::bf::YieldOp>(location, dataIndex, dataStorage);
+    builder.create<mlir::bf::YieldOp>(location, dataIndex);
 
-    dataIndex = loopOp.getIndexResult();
-    dataStorage = loopOp.getDataResult();
+    dataIndex = loopOp.getResult();
   }
 };
 

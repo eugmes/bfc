@@ -3,7 +3,6 @@
 #include "MLIRGen.h"
 #include "Parser.h"
 #include "bf/BFPasses.h"
-#include "mlir/Dialect/Func/Extensions/AllExtensions.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
 #include "mlir/ExecutionEngine/ExecutionEngine.h"
@@ -23,13 +22,8 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Index/IR/IndexDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/InitAllDialects.h"
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
@@ -64,7 +58,7 @@ enum Action {
   None,
   DumpAST,
   DumpMLIR,
-  DumpTensorMLIR,
+  DumpMemRefMLIR,
   DumpMLIRLLVM,
   DumpLLVMIR,
   RunJIT
@@ -75,8 +69,8 @@ static cl::opt<Action> emitAction(
     "emit", cl::desc("Select the kind of output desired"),
     cl::values(clEnumValN(DumpAST, "ast", "output the AST dump")),
     cl::values(clEnumValN(DumpMLIR, "mlir", "output the MLIR dump")),
-    cl::values(clEnumValN(DumpTensorMLIR, "mlir-tensor",
-                          "output the MLIR dump after tensor lowering")),
+    cl::values(clEnumValN(DumpMemRefMLIR, "mlir-memref",
+                          "output the MLIR dump after memref lowering")),
     cl::values(clEnumValN(DumpMLIRLLVM, "mlir-llvm",
                           "output the MLIR dump after llvm lowering")),
     cl::values(clEnumValN(DumpLLVMIR, "llvm", "output the LLVM IR dump")),
@@ -162,7 +156,7 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
   if (mlir::failed(mlir::applyPassManagerCLOptions(pm)))
     return 4;
 
-  bool isLoweringToTensor = emitAction >= Action::DumpTensorMLIR;
+  bool isLoweringToMemRef = emitAction >= Action::DumpMemRefMLIR;
   bool isLoweringToLLVM = emitAction >= Action::DumpMLIRLLVM;
 
   if (enableOpt) {
@@ -171,8 +165,8 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
     optPM.addPass(mlir::createCSEPass());
   }
 
-  if (isLoweringToTensor) {
-    pm.addPass(mlir::bf::createBFConvertToTensors());
+  if (isLoweringToMemRef) {
+    pm.addPass(mlir::bf::createBFConvertToMemRef());
   }
 
   if (isLoweringToLLVM) {
@@ -277,20 +271,11 @@ int main(int argc, char **argv) {
 
   // If we aren't dumping the AST, then we are compiling with/to MLIR.
   mlir::DialectRegistry registry;
-  mlir::func::registerAllExtensions(registry);
-  mlir::registerAllDialects(registry);
 
   mlir::MLIRContext context(registry);
-  context.loadAllAvailableDialects();
-  // context.getOrLoadDialect<mlir::arith::ArithDialect>();
-  // context.getOrLoadDialect<mlir::func::FuncDialect>();
-  // context.getOrLoadDialect<mlir::index::IndexDialect>();
-  // context.getOrLoadDialect<mlir::memref::MemRefDialect>();
-  // context.getOrLoadDialect<mlir::scf::SCFDialect>();
-  // context.getOrLoadDialect<mlir::DLTIDialect>();
-  // context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
+  context.getOrLoadDialect<mlir::DLTIDialect>();
+  context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   context.getOrLoadDialect<mlir::bf::BFDialect>();
-  // context.getOrLoadDialect<mlir::tensor::TensorDialect>();
 
   // Initialize LLVM targets.
   llvm::InitializeNativeTarget();

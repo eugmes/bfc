@@ -10,10 +10,10 @@
 
 include "mlir/Pass/PassBase.td"
 
-def BFConvertToTensors: Pass<"convert-bf-to-tensors", "ModuleOp"> {
-    let summary = "Convert BF dialect into Tensor and other standard MLIR dialects.";
+def BFConvertToMemRef: Pass<"convert-bf-to-memref", "ModuleOp"> {
+    let summary = "Convert BF dialect into memref and other standard MLIR dialects.";
     let dependentDialects = [
-        "tensor::TensorDialect",
+        "memref::MemRefDialect",
         "scf::SCFDialect",
         "arith::ArithDialect",
         "func::FuncDialect",
@@ -23,8 +23,8 @@ def BFConvertToTensors: Pass<"convert-bf-to-tensors", "ModuleOp"> {
 
 def BFConvertToLLVM: Pass<"convert-bf-to-llvm", "ModuleOp"> {
     let dependentDialects = [
-        "bufferization::BufferizationDialect",
         "LLVM::LLVMDialect",
+        "cf::ControlFlowDialect",
     ];
 }
 

@@ -6,16 +6,14 @@
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/Dialect/MemRef/Transforms/Passes.h"
 
 #include "bf/BFPasses.h"
 
@@ -34,21 +32,6 @@ public:
 
     target.addLegalDialect<LLVM::LLVMDialect>();
     target.addLegalOp<mlir::ModuleOp>();
-
-    auto bufferizePM = PassManager::on<ModuleOp>(&getContext());
-    bufferizePM.addPass(bufferization::createOneShotBufferizePass());
-    bufferizePM.addNestedPass<func::FuncOp>(createConvertLinalgToLoopsPass());
-    bufferizePM.addNestedPass<func::FuncOp>(bufferization::createPromoteBuffersToStackPass(1'000'000'000));
-    bufferizePM.addPass(memref::createExpandReallocPass());
-    bufferizePM.addPass(bufferization::createOwnershipBasedBufferDeallocationPass());
-    bufferizePM.addPass(createCanonicalizerPass());
-    bufferizePM.addPass(bufferization::createBufferDeallocationSimplificationPass());
-    bufferizePM.addPass(bufferization::createLowerDeallocationsPass());
-    bufferizePM.addPass(createCSEPass());
-    bufferizePM.addPass(createCanonicalizerPass());
-
-    if (failed(runPipeline(bufferizePM, getOperation())))
-      return signalPassFailure();
 
     // During this lowering, we will also be lowering the MemRef types, that are
     // currently being operated on, to a representation in LLVM. To perform this

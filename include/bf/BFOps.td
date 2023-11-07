@@ -17,11 +17,10 @@ def ModIndexOp : BF_Op<"mod_index", [Pure, AllTypesMatch<["input", "output"]>]> 
   let assemblyFormat = "$input `by` $amount attr-dict";
 }
 
-def ModDataOp : BF_Op<"mod_data", [Pure, AllTypesMatch<["data", "output"]>]> {
+def ModDataOp : BF_Op<"mod_data", []> {
   let summary = "modify the data";
 
   let arguments = (ins DataIndexType:$index, DataStoreType:$data, IndexAttr:$amount);
-  let results = (outs DataStoreType:$output);
 
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$index, "Value":$data, "int64_t":$amount)>];
@@ -37,23 +36,21 @@ def OutputOp : BF_Op<"output", []> {
   let assemblyFormat = "$data `[` $index `]` attr-dict";
 }
 
-def InputOp : BF_Op<"input", [AllTypesMatch<["data", "output"]>]> {
+def InputOp : BF_Op<"input", []> {
   let summary = "input the data";
 
   let arguments = (ins DataIndexType:$index, DataStoreType:$data);
-  let results = (outs DataStoreType:$output);
 
   let assemblyFormat = "$data `[` $index `]` attr-dict";
 }
 
 def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
                             SingleBlock,
-                            AllTypesMatch<["index", "index_result"]>,
-                            AllTypesMatch<["data", "data_result"]>]> {
+                            AllTypesMatch<["index", "result"]>]> {
   let summary = "loop";
 
   let arguments = (ins DataIndexType:$index, DataStoreType:$data);
-  let results = (outs DataIndexType:$index_result, DataStoreType:$data_result);
+  let results = (outs DataIndexType:$result);
   let regions = (region SizedRegion<1>:$region);
 
   let skipDefaultBuilders = 1;
@@ -66,17 +63,13 @@ def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
     BlockArgument getIndexArgument() {
       return getBody()->getArgument(0);
     }
-
-    BlockArgument getDataArgument() {
-      return getBody()->getArgument(1);
-    }
   }];
 }
 
 def YieldOp : BF_Op<"yield", [HasParent<"LoopOp">, Pure, Terminator]> {
   let summary = "yield result from a loop body";
 
-  let arguments = (ins DataIndexType:$index, DataStoreType:$data);
+  let arguments = (ins DataIndexType:$index);
 
   let assemblyFormat = "operands attr-dict";
 }

@@ -25,7 +25,6 @@ void ModIndexOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
 void ModDataOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                       mlir::Value index, mlir::Value data, int64_t amount) {
   state.addOperands({index, data});
-  state.addTypes({data.getType()});
   state.addAttribute(getAmountAttrName(state.name),
                      builder.getIndexAttr(amount));
 }
@@ -33,23 +32,21 @@ void ModDataOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
 void LoopOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                    mlir::Value index, mlir::Value data) {
   state.addOperands({index, data});
-  state.addTypes({index.getType(), data.getType()});
+  state.addTypes({index.getType()});
   Region *bodyRegion = state.addRegion();
   Block *body = new Block();
   bodyRegion->push_back(body);
   body->addArgument(index.getType(), state.location);
-  body->addArgument(data.getType(), state.location);
 }
 
 mlir::ParseResult LoopOp::parse(mlir::OpAsmParser &parser,
                                 mlir::OperationState &state) {
-  OpAsmParser::Argument indexArgument, dataArgument;
+  OpAsmParser::Argument indexArgument;
   OpAsmParser::UnresolvedOperand index, data;
 
   if (parser.parseLParen() || parser.parseArgument(indexArgument) ||
       parser.parseEqual() || parser.parseOperand(index) ||
-      parser.parseComma() || parser.parseArgument(dataArgument) ||
-      parser.parseEqual() || parser.parseOperand(data) ||
+      parser.parseComma() || parser.parseOperand(data) ||
       parser.parseRParen() || parser.parseArrowTypeList(state.types))
     return failure();
 
@@ -62,10 +59,9 @@ mlir::ParseResult LoopOp::parse(mlir::OpAsmParser &parser,
     return failure();
 
   indexArgument.type = state.operands[0].getType();
-  dataArgument.type = state.operands[1].getType();
 
   Region *bodyRegion = state.addRegion();
-  if (parser.parseRegion(*bodyRegion, {indexArgument, dataArgument}))
+  if (parser.parseRegion(*bodyRegion, {indexArgument}))
     return failure();
 
   // Parse the optional attribute list.
@@ -77,8 +73,8 @@ mlir::ParseResult LoopOp::parse(mlir::OpAsmParser &parser,
 
 void LoopOp::print(OpAsmPrinter &p) {
   p << "(" << getBody()->getArgument(0) << " = " << getIndex() << ", "
-    << getBody()->getArgument(1) << " = " << getData() << ")";
-  p.printArrowTypeList(getResultTypes());
+    << getData() << ")";
+  p.printArrowTypeList(TypeRange{getType()}); // FIXME
   p << " ";
   p.printRegion(getRegion(), false);
   p.printOptionalAttrDict((*this)->getAttrs());
@@ -89,14 +85,11 @@ mlir::LogicalResult LoopOp::verifyRegions() {
   if (!body)
     return emitOpError("missing body");
 
-  if (body->getNumArguments() != 2)
-    return emitOpError("expected 2 arguments");
+  if (body->getNumArguments() != 1)
+    return emitOpError("expected 1 argument");
 
   if (!isa<DataIndexType>(getIndexArgument().getType()))
     return emitOpError("first argument should be of '!bf.data_index' type");
-
-  if (!isa<DataStoreType>(getDataArgument().getType()))
-    return emitOpError("second argument should be of '!bf.data_store' type");
 
   // Check that the block is terminated by a YieldOp.
   if (!isa<YieldOp>(body->getTerminator()))
