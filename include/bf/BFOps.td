@@ -14,13 +14,15 @@ def ModIndexOp : BF_Op<"mod_index", [Pure, AllTypesMatch<["input", "output"]>]> 
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$input, "int64_t":$amount)>];
 
+  let hasCanonicalizeMethod = 1;
+
   let assemblyFormat = "$input `by` $amount attr-dict";
 }
 
 def ModDataOp : BF_Op<"mod_data", []> {
   let summary = "modify the data";
 
-  let arguments = (ins DataIndexType:$index, DataStoreType:$data, IndexAttr:$amount);
+  let arguments = (ins DataIndexType:$index, Arg<DataStoreType, "data store", [MemRead, MemWrite]>:$data, IndexAttr:$amount);
 
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$index, "Value":$data, "int64_t":$amount)>];
@@ -49,7 +51,7 @@ def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
                             AllTypesMatch<["index", "result"]>]> {
   let summary = "loop";
 
-  let arguments = (ins DataIndexType:$index, DataStoreType:$data);
+  let arguments = (ins DataIndexType:$index, Arg<DataStoreType, "data store", [MemRead]>:$data);
   let results = (outs DataIndexType:$result);
   let regions = (region SizedRegion<1>:$region);
 

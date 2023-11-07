@@ -9,6 +9,8 @@
 #include "bf/BFOps.h"
 #include "bf/BFDialect.h"
 
+#include "mlir/Support/LogicalResult.h"
+
 #define GET_OP_CLASSES
 #include "bf/BFOps.cpp.inc"
 
@@ -20,6 +22,22 @@ void ModIndexOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
   state.addTypes({input.getType()});
   state.addAttribute(getAmountAttrName(state.name),
                      builder.getIndexAttr(amount));
+}
+
+mlir::LogicalResult ModIndexOp::canonicalize(ModIndexOp op,
+                                             mlir::PatternRewriter &rewriter) {
+  ModIndexOp modOp = op.getInput().getDefiningOp<ModIndexOp>();
+  if (!modOp)
+    return rewriter.notifyMatchFailure(op.getLoc(),
+                                       "operand is not result of mod_index");
+  // TODO: Add accessors
+  auto newAmount = op.getAmountAttr().getInt() + modOp.getAmountAttr().getInt();
+
+  if (newAmount == 0)
+    rewriter.replaceOp(op, modOp.getInput());
+  else
+    rewriter.replaceOpWithNewOp<ModIndexOp>(op, modOp.getInput(), newAmount);
+  return success();
 }
 
 void ModDataOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
