@@ -93,11 +93,43 @@ struct CombineModData : public OpRewritePattern<ModDataOp> {
     return success();
   }
 };
+
+struct CombineSetDataAndModData : public OpRewritePattern<ModDataOp> {
+  using OpRewritePattern<ModDataOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(ModDataOp op,
+                                PatternRewriter &rewriter) const final {
+    // TODO allow to combine ops that are not immediately following each other
+    auto prev = op->getPrevNode();
+    if (!prev || !isa<SetDataOp>(prev))
+      return failure();
+
+    auto prevOp = cast<SetDataOp>(op->getPrevNode());
+    if (!prevOp || (prevOp.getIndex() != op.getIndex()) ||
+        (prevOp.getData() != op.getData()))
+      return failure();
+
+    auto newValue =
+        prevOp.getValueAttr().getInt() + op.getAmountAttr().getInt();
+
+    rewriter.eraseOp(prevOp);
+    rewriter.replaceOpWithNewOp<SetDataOp>(op, op.getIndex(), op.getData(),
+                                           newValue);
+
+    return success();
+  }
+};
 } // namespace
 
 void ModDataOp::getCanonicalizationPatterns(RewritePatternSet &results,
                                             MLIRContext *context) {
-  results.add<CombineModData>(context);
+  results.add<CombineModData, CombineSetDataAndModData>(context);
+}
+
+void SetDataOp::build(OpBuilder &builder, OperationState &state, Value index,
+                      Value data, int64_t value) {
+  state.addOperands({index, data});
+  state.addAttribute(getValueAttrName(state.name), builder.getIndexAttr(value));
 }
 
 void LoopOp::build(OpBuilder &builder, OperationState &state, Value index,
@@ -166,6 +198,47 @@ LogicalResult LoopOp::verifyRegions() {
     return emitOpError("body should be terminated with a 'bf.yiedl' op");
 
   return success();
+}
+
+namespace {
+struct ReplaceSetToZeroLoop : public OpRewritePattern<LoopOp> {
+  using OpRewritePattern<LoopOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(LoopOp op,
+                                PatternRewriter &rewriter) const final {
+    auto body = op.getBody();
+    if (std::size(body->getOperations()) != 2)
+      return failure();
+
+    auto yieldOp = cast<YieldOp>(body->getTerminator());
+    if (yieldOp.getIndex() != op.getIndexArgument())
+      return failure();
+
+    auto firstOp = &body->front();
+    if (!isa<ModDataOp>(firstOp))
+      return failure();
+
+    auto modDataOp = cast<ModDataOp>(firstOp);
+    if (abs(modDataOp.getAmountAttr().getInt()) != 1)
+      return failure();
+    if (modDataOp.getData() != op.getData())
+      return failure();
+
+    if (modDataOp.getIndex() != op.getIndex() &&
+        modDataOp.getIndex() != op.getIndexArgument())
+      return failure();
+
+    rewriter.create<SetDataOp>(op.getLoc(), op.getIndex(), op.getData(), 0);
+    rewriter.replaceOp(op, op.getIndex());
+
+    return success();
+  }
+};
+} // namespace
+
+void LoopOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *context) {
+  results.add<ReplaceSetToZeroLoop>(context);
 }
 
 void ProgramOp::build(OpBuilder &builder, OperationState &state) {

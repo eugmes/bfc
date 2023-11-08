@@ -44,6 +44,23 @@ def ModDataOp : BF_Op<"mod_data", []> {
   }];
 }
 
+def SetDataOp : BF_Op<"set_data", []> {
+  let summary = "set the data to a constant value";
+
+  let arguments = (ins DataIndexType:$index, Arg<DataStoreType, "data store", [MemWrite]>:$data, IndexAttr:$value);
+
+  let skipDefaultBuilders = 1;
+  let builders = [OpBuilder<(ins "Value":$index, "Value":$data, "int64_t":$value)>];
+
+  let assemblyFormat = "$data `[` $index `]` `to` $value attr-dict";
+
+  let extraClassDeclaration = [{
+    void setValue(int64_t value) {
+      setValueAttr(IntegerAttr::get(IndexType::get(getContext()), value));
+    }
+  }];
+}
+
 def OutputOp : BF_Op<"output", []> {
   let summary = "output the data";
 
@@ -74,6 +91,7 @@ def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
 
   let hasCustomAssemblyFormat = 1;
   let hasRegionVerifier = 1;
+  let hasCanonicalizer = 1;
 
   let extraClassDeclaration = [{
     BlockArgument getIndexArgument() {

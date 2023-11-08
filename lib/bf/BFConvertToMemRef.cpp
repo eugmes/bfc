@@ -157,6 +157,27 @@ public:
   }
 };
 
+struct SetDataOpLowering : public OpConversionPattern<SetDataOp> {
+  using OpConversionPattern<SetDataOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(SetDataOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+
+    auto value = op.getValueAttr().getInt(); // TODO better API
+    Value index = adaptor.getIndex();
+    Value data = adaptor.getData();
+
+    Value c =
+        rewriter.create<arith::ConstantIntOp>(loc, value, rewriter.getI8Type());
+    rewriter.replaceOpWithNewOp<memref::StoreOp>(op, c, data,
+                                                 ValueRange{index});
+
+    return success();
+  }
+};
+
 struct OutputOpLowering : public OpConversionPattern<OutputOp> {
 public:
   using OpConversionPattern<OutputOp>::OpConversionPattern;
@@ -277,8 +298,9 @@ public:
 
     RewritePatternSet patterns(&getContext());
     patterns.add<ProgramOpLowering, ModIndexOpLowering, ModDataOpLowering,
-                 InputOpLowering, OutputOpLowering, LoopOpLowering,
-                 YieldOpLowering>(converter, patterns.getContext());
+                 SetDataOpLowering, InputOpLowering, OutputOpLowering,
+                 LoopOpLowering, YieldOpLowering>(converter,
+                                                  patterns.getContext());
 
     if (failed(
             applyFullConversion(getOperation(), target, std::move(patterns))))
