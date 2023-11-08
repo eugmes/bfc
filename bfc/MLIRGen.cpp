@@ -6,6 +6,7 @@
 #include "mlir/Support/LogicalResult.h"
 
 #include "Lexer.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -44,8 +45,8 @@ public:
 
     builder.setInsertionPointToStart(program.getBody());
 
-    dataIndex = program.getIndexArgument();
-    dataStorage = program.getDataArgument();
+    dataIndex = builder.create<mlir::arith::ConstantIndexOp>(location, 0);
+    dataStorage = builder.create<mlir::bf::AllocOp>(location);
 
     mlirGen(*moduleAST.getBody());
 
@@ -103,8 +104,9 @@ private:
 
   void mlirGen(ModIndexOpAST &op) {
     auto location = loc(op.loc());
-    dataIndex = builder.create<mlir::bf::ModIndexOp>(location, dataIndex,
-                                                     op.getValue());
+    mlir::Value c =
+        builder.create<mlir::arith::ConstantIndexOp>(location, op.getValue());
+    dataIndex = builder.create<mlir::arith::AddIOp>(location, dataIndex, c);
   }
 
   void mlirGen(ModDataOpAST &op) {

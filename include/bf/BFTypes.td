@@ -9,10 +9,6 @@ class BF_Type<string name, string typeMnemonic, list<Trait> traits =[]>
   let mnemonic = typeMnemonic;
 }
 
-def DataIndexType : BF_Type<"DataIndex", "data_index"> {
-  let summary = "BF data index type";
-}
-
 def DataStoreType : BF_Type<"DataStore", "data_store"> {
   let summary = "BF data store";
 }

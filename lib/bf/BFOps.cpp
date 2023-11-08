@@ -18,43 +18,6 @@ using namespace mlir;
 using namespace llvm;
 using namespace mlir::bf;
 
-void ModIndexOp::build(OpBuilder &builder, OperationState &state, Value input,
-                       int64_t amount) {
-  state.addOperands({input});
-  state.addTypes({input.getType()});
-  state.addAttribute(getAmountAttrName(state.name),
-                     builder.getIndexAttr(amount));
-}
-
-namespace {
-
-struct CombineModIndex : public OpRewritePattern<ModIndexOp> {
-  using OpRewritePattern<ModIndexOp>::OpRewritePattern;
-
-  LogicalResult matchAndRewrite(ModIndexOp op,
-                                PatternRewriter &rewriter) const final {
-    ModIndexOp modOp = op.getIndex().getDefiningOp<ModIndexOp>();
-    if (!modOp)
-      return rewriter.notifyMatchFailure(
-          op.getLoc(), "operand is not result of bf.mod_index");
-    // TODO: Add accessors
-    auto newAmount =
-        op.getAmountAttr().getInt() + modOp.getAmountAttr().getInt();
-
-    if (newAmount == 0)
-      rewriter.replaceOp(op, modOp.getIndex());
-    else
-      rewriter.replaceOpWithNewOp<ModIndexOp>(op, modOp.getIndex(), newAmount);
-    return success();
-  }
-};
-} // namespace
-
-void ModIndexOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                             MLIRContext *context) {
-  results.add<CombineModIndex>(context);
-}
-
 void ModDataOp::build(OpBuilder &builder, OperationState &state, Value index,
                       Value data, int64_t amount) {
   state.addOperands({index, data});
@@ -154,8 +117,7 @@ ParseResult LoopOp::parse(OpAsmParser &parser, OperationState &state) {
 
   auto &builder = parser.getBuilder();
 
-  if (parser.resolveOperand(index, builder.getType<DataIndexType>(),
-                            state.operands) ||
+  if (parser.resolveOperand(index, builder.getIndexType(), state.operands) ||
       parser.resolveOperand(data, builder.getType<DataStoreType>(),
                             state.operands))
     return failure();
@@ -176,7 +138,7 @@ ParseResult LoopOp::parse(OpAsmParser &parser, OperationState &state) {
 void LoopOp::print(OpAsmPrinter &p) {
   p << "(" << getBody()->getArgument(0) << " = " << getIndex() << ", "
     << getData() << ")";
-  p.printArrowTypeList(TypeRange{getType()}); // FIXME
+  p.printArrowTypeList(TypeRange{getType()});
   p << " ";
   p.printRegion(getRegion(), false);
   p.printOptionalAttrDict((*this)->getAttrs());
@@ -190,8 +152,8 @@ LogicalResult LoopOp::verifyRegions() {
   if (body->getNumArguments() != 1)
     return emitOpError("expected 1 argument");
 
-  if (!isa<DataIndexType>(getIndexArgument().getType()))
-    return emitOpError("first argument should be of '!bf.data_index' type");
+  if (!getIndexArgument().getType().isIndex())
+    return emitOpError("first argument should be of 'index' type");
 
   // Check that the block is terminated by a YieldOp.
   if (!isa<YieldOp>(body->getTerminator()))
@@ -245,48 +207,4 @@ void ProgramOp::build(OpBuilder &builder, OperationState &state) {
   Region *bodyRegion = state.addRegion();
   Block *body = new Block();
   bodyRegion->push_back(body);
-  body->addArgument(builder.getType<DataIndexType>(), state.location);
-  body->addArgument(builder.getType<DataStoreType>(), state.location);
-}
-
-ParseResult ProgramOp::parse(OpAsmParser &parser, OperationState &state) {
-  SmallVector<OpAsmParser::Argument, 2> args;
-  if (parser.parseArgumentList(args, AsmParser::Delimiter::Paren, true))
-    return failure();
-
-  Region *bodyRegion = state.addRegion();
-  if (parser.parseRegion(*bodyRegion, args))
-    return failure();
-
-  // Parse the optional attribute list.
-  if (parser.parseOptionalAttrDict(state.attributes))
-    return failure();
-
-  return success();
-}
-
-void ProgramOp::print(OpAsmPrinter &p) {
-  p << "(";
-  interleaveComma(getBodyRegion().getArguments(), p,
-                  [&p](auto it) { p.printRegionArgument(it); });
-  p << ") ";
-  p.printRegion(getRegion(), false);
-  p.printOptionalAttrDict((*this)->getAttrs());
-}
-
-LogicalResult ProgramOp::verifyRegions() {
-  auto body = getBody();
-  if (!body)
-    return emitOpError("missing body");
-
-  if (body->getNumArguments() != 2)
-    return emitOpError("expected 2 arguments");
-
-  if (!isa<DataIndexType>(getIndexArgument().getType()))
-    return emitOpError("first argument should be of '!bf.data_index' type");
-
-  if (!isa<DataStoreType>(getDataArgument().getType()))
-    return emitOpError("second argument should be of '!bf.data_store' type");
-
-  return success();
 }

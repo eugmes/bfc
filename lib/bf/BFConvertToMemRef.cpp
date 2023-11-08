@@ -1,7 +1,5 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Index/IR/IndexDialect.h"
-#include "mlir/Dialect/Index/IR/IndexOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Support/LogicalResult.h"
@@ -21,11 +19,6 @@ struct BFTypeConverter : public TypeConverter {
   BFTypeConverter() { addConversion(convertType); }
 
   static LogicalResult convertType(Type t, SmallVectorImpl<Type> &results) {
-    if (t.isa<DataIndexType>()) {
-      results.push_back(IndexType::get(t.getContext()));
-      return success();
-    }
-
     if (t.isa<DataStoreType>()) {
       Type byteType =
           IntegerType::get(t.getContext(), 8); // TODO make configurable
@@ -47,9 +40,6 @@ public:
   matchAndRewrite(ProgramOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op.getLoc();
-    auto *bodyBlock = op.getBody();
-
-    auto &converter = *getTypeConverter();
 
     Type intType = rewriter.getI32Type();
     auto getcharType = rewriter.getFunctionType({}, {intType});
@@ -63,30 +53,11 @@ public:
                                   ArrayRef{symVisAttr});
 
     auto funcType = rewriter.getFunctionType({}, {});
-    Type byteType = rewriter.getI8Type();
-
-    Type dataType = converter.convertType(op.getDataArgument().getType());
 
     auto mainFunc = rewriter.create<func::FuncOp>(loc, "main", funcType);
     auto mainBody = rewriter.createBlock(&mainFunc.getBody());
-    Value index = rewriter.create<index::ConstantOp>(loc, 0);
-    Value zeroByte = rewriter.create<arith::ConstantIntOp>(loc, 0, byteType);
-    Value data =
-        rewriter.create<memref::AllocaOp>(loc, cast<MemRefType>(dataType));
 
-    // Initialize the data
-    Value low = rewriter.create<index::ConstantOp>(loc, 0);
-    Value high = rewriter.create<index::ConstantOp>(loc, 30'000); // FIXME
-    Value step = rewriter.create<index::ConstantOp>(loc, 1);
-
-    auto forOp = rewriter.create<scf::ForOp>(loc, low, high, step);
-    auto ip = rewriter.saveInsertionPoint();
-    rewriter.setInsertionPointToStart(forOp.getBody());
-    rewriter.create<memref::StoreOp>(loc, zeroByte, data,
-                                     forOp.getBody()->getArguments());
-    rewriter.restoreInsertionPoint(ip);
-
-    rewriter.mergeBlocks(bodyBlock, mainBody, {index, data});
+    rewriter.mergeBlocks(op.getBody(), mainBody);
     rewriter.create<func::ReturnOp>(loc);
 
     rewriter.eraseOp(op);
@@ -95,27 +66,35 @@ public:
   }
 };
 
-struct ModIndexOpLowering : public OpConversionPattern<ModIndexOp> {
+struct AllocOpLowering : public OpConversionPattern<AllocOp> {
 public:
-  using OpConversionPattern<ModIndexOp>::OpConversionPattern;
+  using OpConversionPattern<AllocOp>::OpConversionPattern;
 
   LogicalResult
-  matchAndRewrite(ModIndexOp op, OpAdaptor adaptor,
+  matchAndRewrite(AllocOp op, OpAdaptor adaptor,
                   ConversionPatternRewriter &rewriter) const final {
     auto loc = op.getLoc();
 
-    auto amount = op.getAmountAttr().getInt(); // TODO better API
-    Value index = adaptor.getIndex();
+    auto &converter = *getTypeConverter();
 
-    if (amount == 0) {
-      rewriter.replaceOp(op, index);
-    } else if (amount < 0) {
-      Value c = rewriter.create<index::ConstantOp>(loc, -amount);
-      rewriter.replaceOpWithNewOp<index::SubOp>(op, index, c);
-    } else {
-      Value c = rewriter.create<index::ConstantOp>(loc, amount);
-      rewriter.replaceOpWithNewOp<index::AddOp>(op, index, c);
-    }
+    Type byteType = rewriter.getI8Type(); // FIXME: make configurable
+    Type dataType = converter.convertType(op.getData().getType());
+
+    Value zeroByte = rewriter.create<arith::ConstantIntOp>(loc, 0, byteType);
+    Value data = rewriter.replaceOpWithNewOp<memref::AllocaOp>(
+        op, cast<MemRefType>(dataType));
+
+    // Initialize the data
+    Value low = rewriter.create<arith::ConstantIndexOp>(loc, 0);
+    Value high = rewriter.create<arith::ConstantIndexOp>(loc, 30'000); // FIXME
+    Value step = rewriter.create<arith::ConstantIndexOp>(loc, 1);
+
+    auto forOp = rewriter.create<scf::ForOp>(loc, low, high, step);
+    auto ip = rewriter.saveInsertionPoint();
+    rewriter.setInsertionPointToStart(forOp.getBody());
+    rewriter.create<memref::StoreOp>(loc, zeroByte, data,
+                                     forOp.getBody()->getArguments());
+    rewriter.restoreInsertionPoint(ip);
 
     return success();
   }
@@ -134,24 +113,14 @@ public:
     Value index = adaptor.getIndex();
     Value data = adaptor.getData();
 
-    if (amount == 0) {
-      rewriter.eraseOp(op);
-    } else {
-      Value oldValue =
-          rewriter.create<memref::LoadOp>(loc, data, ValueRange{index});
-      Value newValue;
-      if (amount < 0) {
-        Value c = rewriter.create<arith::ConstantIntOp>(loc, -amount,
-                                                        rewriter.getI8Type());
-        newValue = rewriter.create<arith::SubIOp>(loc, oldValue, c);
-      } else {
-        Value c = rewriter.create<arith::ConstantIntOp>(loc, amount,
-                                                        rewriter.getI8Type());
-        newValue = rewriter.create<arith::AddIOp>(loc, oldValue, c);
-      }
-      rewriter.replaceOpWithNewOp<memref::StoreOp>(op, newValue, data,
-                                                   ValueRange{index});
-    }
+    Value oldValue =
+        rewriter.create<memref::LoadOp>(loc, data, ValueRange{index});
+
+    Value c = rewriter.create<arith::ConstantIntOp>(loc, amount,
+                                                    rewriter.getI8Type());
+    Value newValue = rewriter.create<arith::AddIOp>(loc, oldValue, c);
+    rewriter.replaceOpWithNewOp<memref::StoreOp>(op, newValue, data,
+                                                 ValueRange{index});
 
     return success();
   }
@@ -289,15 +258,14 @@ public:
     target.addLegalOp<ModuleOp>();
 
     target.addLegalDialect<scf::SCFDialect, arith::ArithDialect,
-                           index::IndexDialect, memref::MemRefDialect,
-                           func::FuncDialect>();
+                           memref::MemRefDialect, func::FuncDialect>();
 
     target.addIllegalDialect<BFDialect>();
 
     BFTypeConverter converter;
 
     RewritePatternSet patterns(&getContext());
-    patterns.add<ProgramOpLowering, ModIndexOpLowering, ModDataOpLowering,
+    patterns.add<ProgramOpLowering, AllocOpLowering, ModDataOpLowering,
                  SetDataOpLowering, InputOpLowering, OutputOpLowering,
                  LoopOpLowering, YieldOpLowering>(converter,
                                                   patterns.getContext());

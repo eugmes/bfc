@@ -5,30 +5,18 @@ include "bf/BFTypes.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-def ModIndexOp : BF_Op<"mod_index", [Pure, AllTypesMatch<["index", "result"]>]> {
-  let summary = "modify the data pointer";
+def AllocOp : BF_Op<"alloc"> {
+  let summary = "allocate the data store";
 
-  let arguments = (ins DataIndexType:$index, IndexAttr:$amount);
-  let results = (outs DataIndexType:$result);
+  let results = (outs Arg<DataStoreType, "data store", [MemAlloc]>:$data);
 
-  let skipDefaultBuilders = 1;
-  let builders = [OpBuilder<(ins "Value":$index, "int64_t":$amount)>];
-
-  let hasCanonicalizer = 1;
-
-  let assemblyFormat = "$index `by` $amount attr-dict";
-
-  let extraClassDeclaration = [{
-    void setAmount(int64_t value) {
-      setAmountAttr(IntegerAttr::get(IndexType::get(getContext()), value));
-    }
-  }];
+  let assemblyFormat = "`:` type($data) attr-dict";
 }
 
-def ModDataOp : BF_Op<"mod_data", []> {
+def ModDataOp : BF_Op<"mod_data"> {
   let summary = "modify the data";
 
-  let arguments = (ins DataIndexType:$index, Arg<DataStoreType, "data store", [MemRead, MemWrite]>:$data, IndexAttr:$amount);
+  let arguments = (ins Index:$index, Arg<DataStoreType, "data store", [MemRead, MemWrite]>:$data, IndexAttr:$amount);
 
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$index, "Value":$data, "int64_t":$amount)>];
@@ -44,10 +32,10 @@ def ModDataOp : BF_Op<"mod_data", []> {
   }];
 }
 
-def SetDataOp : BF_Op<"set_data", []> {
+def SetDataOp : BF_Op<"set_data"> {
   let summary = "set the data to a constant value";
 
-  let arguments = (ins DataIndexType:$index, Arg<DataStoreType, "data store", [MemWrite]>:$data, IndexAttr:$value);
+  let arguments = (ins Index:$index, Arg<DataStoreType, "data store", [MemWrite]>:$data, IndexAttr:$value);
 
   let skipDefaultBuilders = 1;
   let builders = [OpBuilder<(ins "Value":$index, "Value":$data, "int64_t":$value)>];
@@ -61,18 +49,18 @@ def SetDataOp : BF_Op<"set_data", []> {
   }];
 }
 
-def OutputOp : BF_Op<"output", []> {
+def OutputOp : BF_Op<"output"> {
   let summary = "output the data";
 
-  let arguments = (ins DataIndexType:$index, DataStoreType:$data);
+  let arguments = (ins Index:$index, DataStoreType:$data);
 
   let assemblyFormat = "$data `[` $index `]` attr-dict";
 }
 
-def InputOp : BF_Op<"input", []> {
+def InputOp : BF_Op<"input"> {
   let summary = "input the data";
 
-  let arguments = (ins DataIndexType:$index, DataStoreType:$data);
+  let arguments = (ins Index:$index, DataStoreType:$data);
 
   let assemblyFormat = "$data `[` $index `]` attr-dict";
 }
@@ -82,8 +70,8 @@ def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
                             AllTypesMatch<["index", "result"]>]> {
   let summary = "loop";
 
-  let arguments = (ins DataIndexType:$index, Arg<DataStoreType, "data store", [MemRead]>:$data);
-  let results = (outs DataIndexType:$result);
+  let arguments = (ins Index:$index, Arg<DataStoreType, "data store", [MemRead]>:$data);
+  let results = (outs Index:$result);
   let regions = (region SizedRegion<1>:$region);
 
   let skipDefaultBuilders = 1;
@@ -103,32 +91,20 @@ def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
 def YieldOp : BF_Op<"yield", [HasParent<"LoopOp">, Pure, Terminator]> {
   let summary = "yield result from a loop body";
 
-  let arguments = (ins DataIndexType:$index);
+  let arguments = (ins Index:$index);
 
   let assemblyFormat = "operands attr-dict";
 }
 
-def ProgramOp : BF_Op<"program", [IsolatedFromAbove, AutomaticAllocationScope, SingleBlock, NoTerminator]> {
+def ProgramOp : BF_Op<"program", [IsolatedFromAbove, AutomaticAllocationScope, SingleBlock, NoRegionArguments, NoTerminator]> {
   let summary = "program operation";
 
   let regions = (region SizedRegion<1>:$region);
 
   let skipDefaultBuilders = 1;
-  // TODO: add argument names
   let builders = [OpBuilder<(ins)>];
 
-  let hasCustomAssemblyFormat = 1;
-  let hasRegionVerifier = 1;
-
-  let extraClassDeclaration = [{
-    BlockArgument getIndexArgument() {
-      return getBody()->getArgument(0);
-    }
-
-    BlockArgument getDataArgument() {
-      return getBody()->getArgument(1);
-    }
-  }];
+  let assemblyFormat = "$region attr-dict";
 }
 
 #endif // BF_OPS

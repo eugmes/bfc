@@ -12,6 +12,10 @@ def BF_Dialect : Dialect {
   let extraClassDeclaration = [{
     void registerTypes();
   }];
+
+  let dependentDialects = [
+    "arith::ArithDialect",
+  ];
 }
 
 class BF_Op<string mnemonic, list<Trait> traits =[]>

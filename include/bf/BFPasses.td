@@ -17,7 +17,6 @@ def BFConvertToMemRef: Pass<"convert-bf-to-memref", "ModuleOp"> {
         "scf::SCFDialect",
         "arith::ArithDialect",
         "func::FuncDialect",
-        "index::IndexDialect",
     ];
 }
 

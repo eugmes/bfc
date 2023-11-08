@@ -10,6 +10,8 @@
 #include "bf/BFOps.h"
 #include "bf/BFTypes.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
+
 using namespace mlir;
 using namespace mlir::bf;
 

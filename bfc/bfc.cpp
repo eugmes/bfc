@@ -166,6 +166,10 @@ static int loadAndProcessMLIR(mlir::MLIRContext &context,
 
   if (isLoweringToMemRef) {
     pm.addPass(mlir::bf::createBFConvertToMemRef());
+    if (enableOpt) {
+      pm.addPass(mlir::createCanonicalizerPass());
+      pm.addPass(mlir::createCSEPass());
+    }
   }
 
   if (isLoweringToLLVM) {
