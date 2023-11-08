@@ -33,7 +33,6 @@ struct BFTypeConverter : public TypeConverter {
 };
 
 struct ProgramOpLowering : public OpConversionPattern<ProgramOp> {
-public:
   using OpConversionPattern<ProgramOp>::OpConversionPattern;
 
   LogicalResult
@@ -67,7 +66,6 @@ public:
 };
 
 struct AllocOpLowering : public OpConversionPattern<AllocOp> {
-public:
   using OpConversionPattern<AllocOp>::OpConversionPattern;
 
   LogicalResult
@@ -101,7 +99,6 @@ public:
 };
 
 struct ModDataOpLowering : public OpConversionPattern<ModDataOp> {
-public:
   using OpConversionPattern<ModDataOp>::OpConversionPattern;
 
   LogicalResult
@@ -148,7 +145,6 @@ struct SetDataOpLowering : public OpConversionPattern<SetDataOp> {
 };
 
 struct OutputOpLowering : public OpConversionPattern<OutputOp> {
-public:
   using OpConversionPattern<OutputOp>::OpConversionPattern;
 
   LogicalResult
@@ -171,7 +167,6 @@ public:
 };
 
 struct InputOpLowering : public OpConversionPattern<InputOp> {
-public:
   using OpConversionPattern<InputOp>::OpConversionPattern;
 
   LogicalResult
@@ -197,7 +192,6 @@ public:
 };
 
 struct LoopOpLowering : public OpConversionPattern<LoopOp> {
-public:
   using OpConversionPattern<LoopOp>::OpConversionPattern;
 
   LogicalResult
@@ -236,7 +230,6 @@ public:
 };
 
 struct YieldOpLowering : public OpConversionPattern<YieldOp> {
-public:
   using OpConversionPattern<YieldOp>::OpConversionPattern;
 
   LogicalResult
@@ -248,9 +241,8 @@ public:
   }
 };
 
-class BFConvertToMemRef
+struct BFConvertToMemRef
     : public impl::BFConvertToMemRefBase<BFConvertToMemRef> {
-public:
   using impl::BFConvertToMemRefBase<BFConvertToMemRef>::BFConvertToMemRefBase;
 
   void runOnOperation() final {

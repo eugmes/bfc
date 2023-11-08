@@ -23,8 +23,7 @@ namespace mlir::bf {
 
 namespace {
 
-class BFConvertToLLVM : public impl::BFConvertToLLVMBase<BFConvertToLLVM> {
-public:
+struct BFConvertToLLVM : public impl::BFConvertToLLVMBase<BFConvertToLLVM> {
   using impl::BFConvertToLLVMBase<BFConvertToLLVM>::BFConvertToLLVMBase;
 
   void runOnOperation() final {
