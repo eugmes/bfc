@@ -88,6 +88,20 @@ def LoopOp : BF_Op<"loop", [RecursiveMemoryEffects,
   }];
 }
 
+def WhileOp : BF_Op<"while", [RecursiveMemoryEffects, SingleBlock, NoRegionArguments, NoTerminator]> {
+  let summary = "simplified loop";
+
+  let arguments = (ins Index:$index, Arg<DataStoreType, "data store", [MemRead]>:$data);
+  let regions = (region SizedRegion<1>:$region);
+
+  let skipDefaultBuilders = 1;
+  let builders = [OpBuilder<(ins "Value":$index, "Value":$data)>];
+
+  let hasCanonicalizer = 1;
+
+  let assemblyFormat = "$data `[` $index `]` $region attr-dict";
+}
+
 def YieldOp : BF_Op<"yield", [HasParent<"LoopOp">, Pure, Terminator]> {
   let summary = "yield result from a loop body";
 

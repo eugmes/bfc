@@ -229,6 +229,39 @@ struct LoopOpLowering : public OpConversionPattern<LoopOp> {
   };
 };
 
+struct WhileOpLowering : public OpConversionPattern<WhileOp> {
+  using OpConversionPattern<WhileOp>::OpConversionPattern;
+
+  LogicalResult
+  matchAndRewrite(WhileOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto loc = op.getLoc();
+
+    auto whileOp = rewriter.replaceOpWithNewOp<scf::WhileOp>(op, TypeRange {}, ValueRange {});
+
+    {
+      auto &region = whileOp.getBefore();
+      rewriter.createBlock(&region);
+      Value value = rewriter.create<memref::LoadOp>(loc, adaptor.getData(),
+                                                    ValueRange{op.getIndex()});
+      Value zero =
+          rewriter.create<arith::ConstantIntOp>(loc, 0, value.getType());
+      Value cond = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::ne,
+                                                  value, zero);
+      rewriter.create<scf::ConditionOp>(loc, cond, ValueRange {});
+    }
+
+    {
+      auto &region = whileOp.getAfter();
+      auto bodyBlock = rewriter.createBlock(&region);
+      rewriter.mergeBlocks(op.getBody(), bodyBlock, bodyBlock->getArguments());
+      rewriter.create<scf::YieldOp>(op.getLoc());
+    }
+
+    return success();
+  };
+};
+
 struct YieldOpLowering : public OpConversionPattern<YieldOp> {
   using OpConversionPattern<YieldOp>::OpConversionPattern;
 
@@ -259,8 +292,8 @@ struct BFConvertToMemRef
     RewritePatternSet patterns(&getContext());
     patterns.add<ProgramOpLowering, AllocOpLowering, ModDataOpLowering,
                  SetDataOpLowering, InputOpLowering, OutputOpLowering,
-                 LoopOpLowering, YieldOpLowering>(converter,
-                                                  patterns.getContext());
+                 LoopOpLowering, WhileOpLowering, YieldOpLowering>(
+        converter, patterns.getContext());
 
     if (failed(
             applyFullConversion(getOperation(), target, std::move(patterns))))

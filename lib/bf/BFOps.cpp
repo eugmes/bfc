@@ -163,17 +163,52 @@ LogicalResult LoopOp::verifyRegions() {
 }
 
 namespace {
-struct ReplaceSetToZeroLoop : public OpRewritePattern<LoopOp> {
+struct SmplifyLoop : public OpRewritePattern<LoopOp> {
   using OpRewritePattern<LoopOp>::OpRewritePattern;
 
   LogicalResult matchAndRewrite(LoopOp op,
                                 PatternRewriter &rewriter) const final {
     auto body = op.getBody();
-    if (std::size(body->getOperations()) != 2)
-      return failure();
 
     auto yieldOp = cast<YieldOp>(body->getTerminator());
-    if (yieldOp.getIndex() != op.getIndexArgument())
+    if ((yieldOp.getIndex() != op.getIndexArgument()) &&
+        (yieldOp.getIndex() != op.getIndex()))
+      return failure();
+
+    rewriter.eraseOp(body->getTerminator());
+
+    auto whileOp =
+        rewriter.create<WhileOp>(op.getLoc(), op.getIndex(), op.getData());
+    rewriter.mergeBlocks(body, whileOp.getBody(), {op.getIndex()});
+
+    rewriter.replaceOp(op, {op.getIndex()});
+
+    return success();
+  }
+};
+} // namespace
+
+void LoopOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                         MLIRContext *context) {
+  results.add<SmplifyLoop>(context);
+}
+
+void WhileOp::build(OpBuilder &builder, OperationState &state, Value index,
+                    Value data) {
+  state.addOperands({index, data});
+  Region *bodyRegion = state.addRegion();
+  Block *body = new Block();
+  bodyRegion->push_back(body);
+}
+
+namespace {
+struct ReplaceSetToZeroLoop : public OpRewritePattern<WhileOp> {
+  using OpRewritePattern<WhileOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(WhileOp op,
+                                PatternRewriter &rewriter) const final {
+    auto body = op.getBody();
+    if (std::size(body->getOperations()) != 1)
       return failure();
 
     auto firstOp = &body->front();
@@ -183,23 +218,18 @@ struct ReplaceSetToZeroLoop : public OpRewritePattern<LoopOp> {
     auto modDataOp = cast<ModDataOp>(firstOp);
     if (abs(modDataOp.getAmountAttr().getInt()) != 1)
       return failure();
-    if (modDataOp.getData() != op.getData())
+    if (modDataOp.getOperands() != op.getOperands())
       return failure();
 
-    if (modDataOp.getIndex() != op.getIndex() &&
-        modDataOp.getIndex() != op.getIndexArgument())
-      return failure();
-
-    rewriter.create<SetDataOp>(op.getLoc(), op.getIndex(), op.getData(), 0);
-    rewriter.replaceOp(op, op.getIndex());
+    rewriter.replaceOpWithNewOp<SetDataOp>(op, op.getIndex(), op.getData(), 0);
 
     return success();
   }
 };
 } // namespace
 
-void LoopOp::getCanonicalizationPatterns(RewritePatternSet &results,
-                                         MLIRContext *context) {
+void WhileOp::getCanonicalizationPatterns(RewritePatternSet &results,
+                                          MLIRContext *context) {
   results.add<ReplaceSetToZeroLoop>(context);
 }
 
