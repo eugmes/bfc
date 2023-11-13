@@ -33,10 +33,10 @@ struct CombineModData : public OpRewritePattern<ModDataOp> {
                                 PatternRewriter &rewriter) const final {
     // TODO allow to combine ops that are not immediately following each other
     auto prev = op->getPrevNode();
-    if (!prev || !isa<ModDataOp>(prev))
+    if (!prev)
       return failure();
 
-    auto prevOp = cast<ModDataOp>(op->getPrevNode());
+    auto prevOp = dyn_cast<ModDataOp>(op->getPrevNode());
     if (!prevOp || (prevOp.getIndex() != op.getIndex()) ||
         (prevOp.getData() != op.getData()))
       return failure();
@@ -64,10 +64,10 @@ struct CombineSetDataAndModData : public OpRewritePattern<ModDataOp> {
                                 PatternRewriter &rewriter) const final {
     // TODO allow to combine ops that are not immediately following each other
     auto prev = op->getPrevNode();
-    if (!prev || !isa<SetDataOp>(prev))
+    if (!prev)
       return failure();
 
-    auto prevOp = cast<SetDataOp>(op->getPrevNode());
+    auto prevOp = dyn_cast<SetDataOp>(op->getPrevNode());
     if (!prevOp || (prevOp.getIndex() != op.getIndex()) ||
         (prevOp.getData() != op.getData()))
       return failure();
@@ -211,11 +211,9 @@ struct ReplaceSetToZeroLoop : public OpRewritePattern<WhileOp> {
     if (std::size(body->getOperations()) != 1)
       return failure();
 
-    auto firstOp = &body->front();
-    if (!isa<ModDataOp>(firstOp))
+    auto modDataOp = dyn_cast<ModDataOp>(body->front());
+    if (!modDataOp)
       return failure();
-
-    auto modDataOp = cast<ModDataOp>(firstOp);
     if (abs(modDataOp.getAmountAttr().getInt()) != 1)
       return failure();
     if (modDataOp.getOperands() != op.getOperands())
