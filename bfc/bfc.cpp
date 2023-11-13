@@ -27,13 +27,16 @@
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Host.h"
 
 using namespace bf;
 namespace cl = llvm::cl;
@@ -42,6 +45,10 @@ static cl::opt<std::string> inputFilename(cl::Positional,
                                           cl::desc("<input bf file>"),
                                           cl::init("-"),
                                           cl::value_desc("filename"));
+
+static cl::opt<std::string>
+    overrideTarget("target", cl::desc("Generate code for the given target"),
+                   cl::init("default"), cl::value_desc("value"));
 
 namespace {
 enum InputType { BF, MLIR };
@@ -61,7 +68,8 @@ enum Action {
   DumpMemRefMLIR,
   DumpMLIRLLVM,
   DumpLLVMIR,
-  RunJIT
+  RunJIT,
+  DumpASM,
 };
 } // namespace
 
@@ -76,7 +84,8 @@ static cl::opt<Action> emitAction(
     cl::values(clEnumValN(DumpLLVMIR, "llvm", "output the LLVM IR dump")),
     cl::values(
         clEnumValN(RunJIT, "jit",
-                   "JIT the code and run it by invoking the main function")));
+                   "JIT the code and run it by invoking the main function")),
+    cl::values(clEnumValN(DumpASM, "asm", "output the target assembly")));
 
 static cl::opt<bool> enableOpt("opt", cl::desc("Enable optimizations"));
 
@@ -207,29 +216,27 @@ static int dumpAST() {
   return 0;
 }
 
-static int dumpLLVMIR(mlir::ModuleOp module) {
+static std::unique_ptr<llvm::Module>
+convertToLLVM(llvm::LLVMContext &llvmContext, mlir::ModuleOp module,
+              llvm::TargetMachine &tm) {
   // Register the translation to LLVM IR with the MLIR context.
   mlir::registerBuiltinDialectTranslation(*module->getContext());
   mlir::registerLLVMDialectTranslation(*module->getContext());
 
-  // Convert the module to LLVM IR in a new LLVM IR context.
-  llvm::LLVMContext llvmContext;
   auto llvmModule = mlir::translateModuleToLLVMIR(module, llvmContext);
   if (!llvmModule) {
     llvm::errs() << "Failed to emit LLVM IR\n";
-    return -1;
+    std::exit(-1);
   }
 
   /// Optionally run an optimization pipeline over the llvm module.
   auto optPipeline = mlir::makeOptimizingTransformer(
-      /*optLevel=*/enableOpt ? 3 : 0, /*sizeLevel=*/0,
-      /*targetMachine=*/nullptr);
+      /*optLevel=*/enableOpt ? 3 : 0, /*sizeLevel=*/0, &tm);
   if (auto err = optPipeline(llvmModule.get())) {
     llvm::errs() << "Failed to optimize LLVM IR " << err << "\n";
-    return -1;
+    std::exit(-1);
   }
-  llvm::outs() << *llvmModule << "\n";
-  return 0;
+  return llvmModule;
 }
 
 static int runJit(mlir::ModuleOp module) {
@@ -280,24 +287,52 @@ int main(int argc, char **argv) {
   context.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   context.getOrLoadDialect<mlir::bf::BFDialect>();
 
-  // Initialize LLVM targets.
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
+  std::unique_ptr<llvm::TargetMachine> tm;
 
-  // Configure the LLVM Module
-  auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
-  if (!tmBuilderOrError) {
-    llvm::errs() << "Could not create JITTargetMachineBuilder\n";
-    return -1;
+  if (emitAction == Action::RunJIT) {
+    // Initialize LLVM targets.
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+
+    // Configure the LLVM Module
+    auto tmBuilderOrError = llvm::orc::JITTargetMachineBuilder::detectHost();
+    if (!tmBuilderOrError) {
+      llvm::errs() << "Could not create JITTargetMachineBuilder\n";
+      return -1;
+    }
+
+    auto tmOrError = tmBuilderOrError->createTargetMachine();
+    if (!tmOrError) {
+      llvm::errs() << "Could not create TargetMachine\n";
+      return -1;
+    }
+
+    tm = std::move(tmOrError.get());
+  } else {
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmParsers();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string targetTriple = overrideTarget;
+    if (targetTriple == "default")
+      targetTriple = llvm::sys::getDefaultTargetTriple();
+
+    std::string error;
+    auto target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+
+    if (!target) {
+      llvm::errs() << error << "\n";
+      return -1;
+    }
+
+    auto cpu = "generic";
+    auto features = "";
+    llvm::TargetOptions opts;
+    tm.reset(
+        target->createTargetMachine(targetTriple, cpu, features, opts, {}));
   }
-
-  auto tmOrError = tmBuilderOrError->createTargetMachine();
-  if (!tmOrError) {
-    llvm::errs() << "Could not create TargetMachine\n";
-    return -1;
-  }
-
-  auto tm = std::move(tmOrError.get());
 
   mlir::OwningOpRef<mlir::ModuleOp> module;
   if (int error = loadAndProcessMLIR(context, module, *tm))
@@ -310,14 +345,25 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  // Check to see if we are compiling to LLVM IR.
-  if (emitAction == Action::DumpLLVMIR)
-    return dumpLLVMIR(*module);
-
-  // Otherwise, we must be running the jit.
-  if (emitAction == Action::RunJIT)
+  if (emitAction == Action::RunJIT) {
     return runJit(*module);
+  }
 
-  llvm::errs() << "No action specified (parsing only?), use -emit=<action>\n";
-  return -1;
+  llvm::LLVMContext llvmContext;
+  auto llvmModule = convertToLLVM(llvmContext, *module, *tm);
+  if (emitAction == Action::DumpLLVMIR) {
+    llvm::outs() << *llvmModule << "\n";
+    return 0;
+  }
+
+  llvm::legacy::PassManager pass;
+  auto fileType = llvm::CodeGenFileType::AssemblyFile;
+
+  if (tm->addPassesToEmitFile(pass, llvm::outs(), nullptr, fileType)) {
+    llvm::errs() << "TargetMachine cannot emit assembly\n";
+    return 1;
+  }
+
+  pass.run(*llvmModule);
+  return 0;
 }
